@@ -1,5 +1,7 @@
 # Changelog
 **1.0.0**
+
+
 FIXES:
 - SPEL expression execution throws exceptions in new Spring boot (relates with new introduced security in Spring boot for SPEL)
 - UUID field type parsing;
