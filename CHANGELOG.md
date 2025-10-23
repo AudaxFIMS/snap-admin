@@ -1,4 +1,15 @@
 # Changelog
+**1.0.0**
+FIXES:
+- SPEL expression execution throws exceptions in new Spring boot (relates with new introduced security in Spring boot for SPEL)
+- UUID field type parsing;
+- fix pagination and parametrized queries;
+- fix for OffsetDateTimeFieldType parser;
+- fix collect all fields for entity (before extended class fields was missed);
+- fix collect all getters and setters for entity;
+TODO:
+- support edition of entities with composite primary keys (for now available just in table review mode);
+
 **0.2.2**
 - Fixed #49
 
