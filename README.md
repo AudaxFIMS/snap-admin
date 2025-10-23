@@ -1,4 +1,8 @@
-[![javadoc](https://javadoc.io/badge2/tech.ailef/snap-admin/javadoc.svg)](https://javadoc.io/doc/tech.ailef/snap-admin) 
+# This project is from the original project located here: [https://github.com/aileftech/snap-admin](https://github.com/aileftech/snap-admin)
+
+
+## Unfortunately original project not actively supported anymore and has few bugs related wirg new Spring Boot security improvements that's why this project was created on my own account.
+
 
 > The project has been recently renamed from 'Spring Boot Database Admin' to 'SnapAdmin'.
 > If you were already using 'Spring Boot Database Admin' make sure to update your `pom.xml` and other
@@ -51,15 +55,15 @@ The code is still in a very early stage and it might not be robust if you use no
 
 ```xml
 <dependency>
-	<groupId>tech.ailef</groupId>
+	<groupId>dev.semeshin</groupId>
 	<artifactId>snap-admin</artifactId>
-	<version>0.2.1</version>
+	<version>1.0.0</version>
 </dependency>
 ```
 
 2. A few simple configuration steps are required on your end in order to integrate the library into your project. 
-If you don't want to test on your own code, you can clone the [test project](https://github.com/aileftech/snap-admin-test) which provides
-a sample database and already configured code.
+If you don't want to test on your own code, you can clone the [original test project](https://github.com/aileftech/snap-admin-test) 
+which provides a sample database and already configured code. Should work for current release also.
 
 Otherwise, go ahead and add these to your `application.properties` file:
 
@@ -104,7 +108,6 @@ This will autoconfigure SnapAdmin when your application starts. You are good to 
 
 ## Documentation
 
-* [Latest Javadoc](https://javadoc.io/doc/tech.ailef/snap-admin/)
 * [Reference Guide](https://snapadmin.dev/docs/)
 
 ## Issues
