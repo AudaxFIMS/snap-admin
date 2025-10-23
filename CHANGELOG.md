@@ -7,6 +7,8 @@ FIXES:
 - fix for OffsetDateTimeFieldType parser;
 - fix collect all fields for entity (before extended class fields was missed);
 - fix collect all getters and setters for entity;
+
+
 TODO:
 - support edition of entities with composite primary keys (for now available just in table review mode);
 
