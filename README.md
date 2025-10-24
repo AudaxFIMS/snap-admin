@@ -51,7 +51,7 @@ The code is still in a very early stage and it might not be robust if you use no
 
 ## Installation
 
-1. SnapAdmin is distributed on Maven. For the latest stable release you can simply include the following snippet in your `pom.xml` file:
+1. This fork of SnapAdmin isn't distributed on Maven. For the latest stable release make Maven build from main branch code and put it into your artifact repository after that you can simply include the following snippet in your `pom.xml` file:
 
 ```xml
 <dependency>
