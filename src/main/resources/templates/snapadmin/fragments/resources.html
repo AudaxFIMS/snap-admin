@@ -39,6 +39,9 @@
 	        </a>
 	        <div th:if="${snapadmin_authenticated}" class="d-flex align-items-center p-2" id="current-user">
     			<i class="bi bi-person-circle me-2"></i> [[ ${snapadmin_authenticatedUser} ]]
+				<form th:action="@{|/${snapadmin_baseUrl}/logout|}" method="post">
+					<button type="submit" class="btn btn-danger">Logout</button>
+				</form>
 	        </div>
 	    </div>
 	</nav>
