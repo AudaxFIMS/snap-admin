@@ -9,20 +9,46 @@
 		<version>3.5.6</version>
 		<relativePath /> <!-- lookup parent from repository -->
 	</parent>
+
 	<groupId>dev.semeshin</groupId>
 	<artifactId>snap-admin</artifactId>
 	<version>1.0.0</version>
+	<packaging>jar</packaging>
+
 	<name>SnapAdmin</name>
 	<description>SnapAdmin is an auto-generated CRUD admin panel for Spring Boot/JPA apps</description>
-	<properties>
-		<java.version>25</java.version>
-	</properties>
+	<url>https://github.com/AudaxFIMS/snap-admin</url>
+
 	<licenses>
 		<license>
 			<name>MIT License</name>
 			<url>https://opensource.org/license/mit</url>
 		</license>
 	</licenses>
+
+	<developers>
+		<developer>
+			<id>AudaxFIMS</id>
+			<name>Alexey Semeshin</name>
+			<email>audax.wf@gmail.com</email>
+			<organizationUrl>https://github.com/AudaxFIMS</organizationUrl>
+		</developer>
+		<developer>
+			<id>aileftech</id>
+			<name>Ailef</name>
+			<url>https://ailef.tech/</url>
+		</developer>
+	</developers>
+
+	<scm>
+		<connection>scm:git:git://github.com:AudaxFIMS/snap-admin.git</connection>
+		<developerConnection>scm:git:ssh://github.com:AudaxFIMS/snap-admin.git</developerConnection>
+		<url>https://github.com/AudaxFIMS/snap-admin</url>
+	</scm>
+
+	<properties>
+		<java.version>25</java.version>
+	</properties>
 
 	<profiles>
 		<profile>

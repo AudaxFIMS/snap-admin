@@ -81,8 +81,12 @@ public class CustomJpaRepository extends SimpleJpaRepository {
 			query.select(root)
 				.where(
 					cb.or(
-							cb.and(finalPredicates.toArray(new Predicate[finalPredicates.size()])), // query search on String fields
-							cb.equal(root.get(schema.getPrimaryKey().getJavaName()).as(String.class), q)
+						cb.and(finalPredicates.toArray(new Predicate[finalPredicates.size()])),
+						// query search on String fields
+						cb.equal(
+								cb.lower(cb.toString(root.get(schema.getPrimaryKey().getJavaName()))),
+								q.toLowerCase()
+						)
 					)
 				);
 		} else {
@@ -163,13 +167,10 @@ public class CustomJpaRepository extends SimpleJpaRepository {
 	}
 	
 	@SuppressWarnings("unchecked")
-	private List<Predicate> buildPredicates(String q, Set<QueryFilter> queryFilters,
-			CriteriaBuilder cb, Path root) {
+	private List<Predicate> buildPredicates(String q, Set<QueryFilter> queryFilters, CriteriaBuilder cb, Path root) {
 		List<Predicate> finalPredicates = new ArrayList<>();
-        
-        List<DbField> stringFields = 
-        	schema.getSortedFields().stream().filter(f -> f.getType() instanceof StringFieldType || f.getType() instanceof TextFieldType)
-        			.collect(Collectors.toList());
+
+		List<DbField> stringFields = schema.getSortedFields();
         
         List<Predicate> queryPredicates = new ArrayList<>();
         if (q != null && !q.isBlank()) {

@@ -67,8 +67,8 @@
 			</span>
 			<input placeholder="NULL" 
 				type="datetime-local"
-				th:value="${#temporals.format(value, 'yyyy-MM-dd''T''HH:mm:ss.SSS')}"
-				th:name="${name}" 
+				   th:value="${value != null and not #strings.isEmpty(value) ? #temporals.format(value, 'yyyy-MM-dd''T''HH:mm:ss.SSS') : null}"
+				   th:name="${name}"
 				class="form-control " th:id="|__id_${field.getName()}|"
 				th:classAppend="|${create != null && ((field.isPrimaryKey() && object != null) ||
 				 	(field.isReadOnly() && !create)) ? 'disable' : ''}|"
@@ -89,32 +89,6 @@
 			</option>
 		</select>
 	</th:block>
-	<!--
-	<th:block th:fragment="offset_datetime(field, create, name, value)">
-		<div class="form-group">
-			<input placeholder="NULL"  
-				type="datetime-local"
-				th:value="${value}" 
-				th:name="${name}" 
-				class="form-control " th:id="|__id_${field.getName()}|"
-				th:classAppend="|${(field.isPrimaryKey() && object != null) ||
-				 	(field.isReadOnly() && !create) ? 'disable' : ''}|"
-				
-				th:required="${!field.isNullable() && !field.isPrimaryKey()}"
-				>
-			</input>
-			<select name="offset" class="form-select">
-				<option value="0">0</option>
-				<option value="1">1</option>
-				<option value="2">2</option>
-				<option value="3">3</option>
-				<option value="4">4</option>
-				<option value="5">5</option>
-				<option value="6">6</option>
-			</select>
-		</div>
-	</th:block>
-	-->
 	<th:block th:fragment="date(field, create, name, value)">
 		<div class="input-group">
 			<span class="input-group-text font-monospace">
