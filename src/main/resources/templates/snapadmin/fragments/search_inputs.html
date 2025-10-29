@@ -51,8 +51,8 @@
 	
 	<input placeholder="NULL" th:fragment="datetime(field, create, name, value)" 
 		type="datetime-local"
-		th:value="${#temporals.format(value, 'yyyy-MM-dd''T''HH:mm:ss.SSS')}"
-		th:name="${name}" 
+		   th:value="${value != null and not #strings.isEmpty(value) ? #temporals.format(value, 'yyyy-MM-dd''T''HH:mm:ss.SSS') : null}"
+		   th:name="${name}"
 		class="form-control " th:id="|__id_${field.getName()}|"
 		th:classAppend="|${create != null && ((field.isPrimaryKey() && object != null) ||
 		 	(field.isReadOnly() && !create)) ? 'disable' : ''}|"
