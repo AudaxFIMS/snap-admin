@@ -552,7 +552,7 @@ public class SnapAdminController {
 	
 	@GetMapping("/console/new")
 	public String consoleNew(Model model) {
-		if (!properties.isSqlConsoleEnabled()) {
+		if (properties.isSqlConsoleDisabled()) {
 			throw new SnapAdminException("SQL console not enabled");
 		}
 		
@@ -563,7 +563,7 @@ public class SnapAdminController {
 	
 	@GetMapping("/console")
 	public String console() {
-		if (!properties.isSqlConsoleEnabled()) {
+		if (properties.isSqlConsoleDisabled()) {
 			throw new SnapAdminException("SQL console not enabled");
 		}
 		
@@ -590,7 +590,7 @@ public class SnapAdminController {
 	
 	@PostMapping("/console/delete/{queryId}")
 	public String consoleDelete(@PathVariable String queryId, Model model) {
-		if (!properties.isSqlConsoleEnabled()) {
+		if (properties.isSqlConsoleDisabled()) {
 			throw new SnapAdminException("SQL console not enabled");
 		}
 		consoleService.delete(queryId);
@@ -608,7 +608,7 @@ public class SnapAdminController {
 		
 		long startTime = System.currentTimeMillis();
 		
-		if (!properties.isSqlConsoleEnabled()) {
+		if (properties.isSqlConsoleDisabled()) {
 			throw new SnapAdminException("SQL console not enabled");
 		}
 		
@@ -673,7 +673,7 @@ public class SnapAdminController {
 	
 	@PostMapping("/settings")
 	public String settings(@RequestParam Map<String, String> params, Model model) {
-		String next = params.getOrDefault("next", "settings/settings");
+		String next = params.getOrDefault("next", "snapadmin/settings/settings");
 		
 		for (String paramName : params.keySet()) {
 			if (paramName.equals("next")) continue;
