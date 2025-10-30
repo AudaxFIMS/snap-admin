@@ -67,7 +67,7 @@
 <p>SnapAdmin is a tool to easily build customizable database management interfaces with CRUD operations (and more!) for Spring Boot+JPA apps.</p>
 <p>It does so by scanning your JPA-annotated <code>@Entity</code> classes and building the required functionality at runtime. Since it won't generate actual code you won't have to change your existing code base, and this makes it easy to integrate. Moreover, every time you update your classes, all changes will be reflected automatically on the web UI. 
 </p>
-<p>On the other hand, this approach requires to interact correctly with all JPA annotations and adapt our behaviour accordingly. This is not an easy task given the large surface area of possible behaviours introduced with annotations and can sometimes introduce bugs. If you encounter problems, please <a href="https://github.com/AudaxFIMS/snap-admin/issues" target="_blank">report it as an issue on Github</a>.</p>
+<p>On the other hand, this approach requires to interact correctly with all JPA annotations and adapt our behaviour accordingly. This is not an easy task given the large surface area of possible behaviours introduced with annotations and can sometimes introduce bugs. If you encounter problems, please <a href="https://github.com/aileftech/snap-admin/issues" target="_blank">report it as an issue on Github</a>.</p>
 
 <p>The rest of this guide outlines how to install, configure and customize SnapAdmin and, where applicable, it documents known interactions with JPA annotations. If, instead, you are looking for the Javadoc, you can find it <a href="https://javadoc.io/doc/tech.ailef/snap-admin/latest/index.html">here</a>.</p>
 <div class="separator"></div>
@@ -80,9 +80,9 @@
 
 <pre>
 <code class="language-xml">&lt;dependency&gt;
-	&lt;groupId&gt;dev.semeshin&lt;/groupId&gt;
+	&lt;groupId&gt;tech.ailef&lt;/groupId&gt;
 	&lt;artifactId&gt;snap-admin&lt;/artifactId&gt;
-	&lt;version&gt;1.0.0&lt;/version&gt;
+	&lt;version&gt;0.2.1&lt;/version&gt;
 &lt;/dependency&gt;
 </code>
 </pre>
@@ -422,10 +422,10 @@ To setup things correctly so that this can't happen you have a few options:</p>
 For example, you can add something like this to your security configuration:
 
 <pre><code class="language-java">.requestMatchers(
-    AntPathRequestMatcher.antMatcher("/" + baseUrl + "/model/dev.semeshin.snapadmin.auth.models.User")
+    AntPathRequestMatcher.antMatcher("/" + baseUrl + "/model/tech.ailef.snapadmin.auth.models.User")
 ).hasAuthority("ADMIN")
 .requestMatchers(
-    AntPathRequestMatcher.antMatcher("/" + baseUrl + "/model/dev.semeshin.snapadmin.auth.models.Role")
+    AntPathRequestMatcher.antMatcher("/" + baseUrl + "/model/tech.ailef.snapadmin.auth.models.Role")
 ).hasAuthority("ADMIN")
 </code></pre>
 

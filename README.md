@@ -92,9 +92,15 @@ snapadmin.modelsPackage=your.models.package,your.second.models.package
 #
 ## SQL console enable/disable (true by default)
 # snapadmin.sqlConsoleEnabled=false
+#
+## Set to true if you need to use external datasource for storing Snapadmin service data
+# snapadmin.enabledAppInternalDs=true
+#
+## Set prefix for external datasource if it's not align with standard spring boot datasource
+# snapadmin.appInternalDsSettingsPrefix=spring.lotcore
 ```
 
-**IMPORTANT**: The configuration prefix `dbadmin.` has been changed to `snapadmin.` starting from version 0.2.0, as part of the project being renamed. Remember to update your configuration files accordingly if you were already using SnapAdmin <= 0.1.9.
+**IMPORTANT**: The configuration prefix is `snapadmin.`
 
 Now annotate your `@SpringBootApplication` class containing the `main` method with the following:
 
@@ -118,3 +124,22 @@ If you find a problem or a bug, please report it as an issue. When doing so, inc
  * provide the full stack trace of the error
  * specify if you are using any particular configuration either in your `application.properties` or through annotations
  * if the problem occurs at startup, enable `DEBUG`-level logs and report what `grep SnapAdmin` returns
+
+## Updates in current fork
+
+**Version 1.0.0**
+
+FIXES:
+- SPEL expression execution throws exceptions in new Spring boot (relates with new introduced security in Spring boot for SPEL)
+- UUID field type parsing;
+- pagination and parametrized queries;
+- OffsetDateTimeFieldType parser;
+- collect all fields for entity (before extended class fields was missed);
+- collect all getters and setters for entity;
+- settings page;
+- Entity record creation with field types (timestamp);
+- entity record search engine;
+
+FEATURES:
+- added logout button for security mode;
+- added functionality for storing Snapadmin service data into the same DB with the application (for that we should set 'enabledAppInternalDs: true' and if it's not a standard DS, then set settings prefix 'appInternalDsSettingsPrefix: spring.customdatasource');
