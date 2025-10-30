@@ -7,18 +7,22 @@
 
 package dev.semeshin.snapadmin.external;
 
+import java.util.Collections;
+import java.util.Map;
 import java.util.Properties;
 
 import javax.sql.DataSource;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
@@ -36,7 +40,7 @@ import dev.semeshin.snapadmin.internal.InternalSnapAdminConfiguration;
  * H2 database which is used by SnapAdmin to store user
  * settings and other information like operations history. 
  */
-@ConditionalOnProperty(name = "snapadmin.enabled", matchIfMissing = false)
+@ConditionalOnProperty(name = "snapadmin.enabled")
 @ComponentScan
 @EnableConfigurationProperties(SnapAdminProperties.class)
 @Configuration
@@ -46,42 +50,97 @@ import dev.semeshin.snapadmin.internal.InternalSnapAdminConfiguration;
 )
 @EnableTransactionManagement
 @Import(InternalSnapAdminConfiguration.class)
+@SuppressWarnings("unchecked")
 public class SnapAdminAutoConfiguration {
-	@Autowired
-	private SnapAdminProperties props;
+	private final SnapAdminProperties props;
+	private final ConfigurableEnvironment env;
+
+	private Map<String, Object> datasourceProp;
+	private Map<String, Object> jpaProp;
+
+	public SnapAdminAutoConfiguration(SnapAdminProperties props, ConfigurableEnvironment env) {
+		this.props = props;
+		this.env = env;
+
+		if (props.isEnabledAppInternalDs()) {
+			Map<String, Object> appInternalDsProperties = getPropertiesWithPrefix(props.getAppInternalDsSettingsPrefix());
+
+			this.datasourceProp = (Map<String, Object>) appInternalDsProperties.get("datasource");
+			this.jpaProp = (Map<String, Object>) appInternalDsProperties.get("jpa");
+		}
+	}
 
 	/**
 	 * Builds and returns the internal data source.
 	 * 
-	 * @return
+	 * @return internalDataSource
 	 */
 	@Bean
 	DataSource internalDataSource() {
 		DataSourceBuilder<?> dataSourceBuilder = DataSourceBuilder.create();
-		dataSourceBuilder.driverClassName("org.h2.Driver");
-		if (props.isTestMode()) {
-			dataSourceBuilder.url("jdbc:h2:mem:test");
+
+		if (props.isEnabledAppInternalDs()) {
+			dataSourceBuilder
+				.url(datasourceProp.getOrDefault("jdbc-url", "").toString())
+				.driverClassName(datasourceProp.getOrDefault("driver-class-name", "").toString())
+				.username(datasourceProp.getOrDefault("username", "").toString())
+				.password(datasourceProp.getOrDefault("password", "").toString());
 		} else {
-			dataSourceBuilder.url("jdbc:h2:file:./snapadmin_internal");
+			dataSourceBuilder.driverClassName("org.h2.Driver");
+			if (props.isTestMode()) {
+				dataSourceBuilder.url("jdbc:h2:mem:test");
+			} else {
+				dataSourceBuilder.url("jdbc:h2:file:./snapadmin_internal");
+			}
+
+			dataSourceBuilder.username("sa");
+			dataSourceBuilder.password("password");
 		}
-		
-		dataSourceBuilder.username("sa");
-		dataSourceBuilder.password("password");
+
 		return dataSourceBuilder.build();
+	}
+
+	private Map<String, Object> getPropertiesWithPrefix(String prefix) {
+		Binder binder = Binder.get(env);
+		return binder
+				.bind(prefix, Bindable.mapOf(String.class, Object.class))
+				.orElse(Collections.emptyMap());
 	}
 
 	@Bean
 	LocalContainerEntityManagerFactoryBean internalEntityManagerFactory() {
 		LocalContainerEntityManagerFactoryBean factoryBean = new LocalContainerEntityManagerFactoryBean();
+
 		factoryBean.setDataSource(internalDataSource());
 		factoryBean.setPersistenceUnitName("internal");
 		factoryBean.setPackagesToScan("dev.semeshin.snapadmin.internal.model");
 		factoryBean.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
+
 		Properties properties = new Properties();
-		properties.setProperty("hibernate.dialect", "org.hibernate.dialect.H2Dialect");
-		properties.setProperty("hibernate.hbm2ddl.auto", "update");
+
+		if (props.isEnabledAppInternalDs()) {
+			properties.setProperty("hibernate.dialect",
+					jpaProp.getOrDefault("database-platform", "").toString());
+
+			Map<String, Object> hibernateProp = (Map<String, Object>) jpaProp
+					.getOrDefault("hibernate", Collections.emptyMap());
+
+			if (hibernateProp.containsKey("ddl-auto")) {
+				properties
+					.setProperty("hibernate.hbm2ddl.auto", hibernateProp.getOrDefault("ddl-auto", "none")
+							.toString()
+					);
+			} else {
+				properties.setProperty("hibernate.hbm2ddl.auto", "none");
+			}
+		} else {
+			properties.setProperty("hibernate.dialect", "org.hibernate.dialect.H2Dialect");
+			properties.setProperty("hibernate.hbm2ddl.auto", "update");
+		}
+
 		factoryBean.setJpaProperties(properties);
 		factoryBean.afterPropertiesSet();
+
 		return factoryBean;
 	}
 
@@ -91,7 +150,7 @@ public class SnapAdminAutoConfiguration {
 	 * registered by the user. Internally, we use this to instantiate a
 	 * TransactionTemplate and run all transactions manually instead of
 	 * relying on the @link {@link Transactional} annotation.
-	 * @return
+	 * @return internalTransactionManager
 	 */
 	PlatformTransactionManager internalTransactionManager() {
 		JpaTransactionManager transactionManager = new JpaTransactionManager();

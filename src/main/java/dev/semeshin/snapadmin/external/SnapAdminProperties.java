@@ -40,10 +40,20 @@ public class SnapAdminProperties {
 	 * Whether the SQL console feature is enabled
 	 */
 	private boolean sqlConsoleEnabled = true;
+
+	/**
+	 * Enable settings for storage Internal Snapadmin data (logs / users) into application DB datasource
+	 */
+	private boolean enabledAppInternalDs = false;
+
+	/*
+	* Prefix for application DS settings in Spring boot application property
+	 */
+	private String appInternalDsSettingsPrefix = "spring.datasource";
 	
 	/**
 	 * Whether SnapAdmin is enabled
-	 * @return
+	 * @return isEnable
 	 */
 	public boolean isEnabled() {
 		return enabled;
@@ -53,8 +63,8 @@ public class SnapAdminProperties {
 		this.enabled = enabled;
 	}
 	
-	public boolean isSqlConsoleEnabled() {
-		return sqlConsoleEnabled;
+	public boolean isSqlConsoleDisabled() {
+		return !sqlConsoleEnabled;
 	}
 	
 	public void setSqlConsoleEnabled(boolean sqlConsoleEnabled) {
@@ -63,7 +73,7 @@ public class SnapAdminProperties {
 
 	/**
 	 * Returns the prefix that is prepended to all routes registered by SnapAdmin.
-	 * @return
+	 * @return baseUrl
 	 */
 	public String getBaseUrl() {
 		return baseUrl;
@@ -75,7 +85,7 @@ public class SnapAdminProperties {
 	
 	/**
 	 * Returns the path of the package that contains your JPA `@Entity` classes to be scanned.
-	 * @return
+	 * @return modelsPackage
 	 */
 	public String getModelsPackage() {
 		return modelsPackage;
@@ -92,16 +102,20 @@ public class SnapAdminProperties {
 	public void setTestMode(boolean testMode) {
 		this.testMode = testMode;
 	}
-	
-//	public Map<String, String> toMap() {
-//		Map<String, String> conf = new HashMap<>();
-//		conf.put("enabled", enabled + "");
-//		conf.put("baseUrl", baseUrl);
-//		conf.put("modelsPackage", modelsPackage);
-//		conf.put("testMode", testMode + "");
-//		conf.put("sqlConsoleEnabled", sqlConsoleEnabled + "");
-//		return conf;
-//	}
-	
-	
+
+    public boolean isEnabledAppInternalDs() {
+        return enabledAppInternalDs;
+    }
+
+    public void setEnabledAppInternalDs(boolean enabledAppInternalDs) {
+        this.enabledAppInternalDs = enabledAppInternalDs;
+    }
+
+    public String getAppInternalDsSettingsPrefix() {
+        return appInternalDsSettingsPrefix;
+    }
+
+    public void setAppInternalDsSettingsPrefix(String appInternalDsSettingsPrefix) {
+        this.appInternalDsSettingsPrefix = appInternalDsSettingsPrefix;
+    }
 }
