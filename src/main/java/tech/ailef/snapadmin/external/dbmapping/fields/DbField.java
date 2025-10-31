@@ -174,7 +174,11 @@ public class DbField {
 	public String getFormat() {
 		return format;
 	}
-	
+
+	/**
+	 * Check field type is text or not
+	 * @return check result
+	 */
 	public boolean isText() {
 		return type instanceof TextFieldType;
 	}
