@@ -234,7 +234,7 @@ public class SnapAdmin {
 	 * This method return all fields include fields from extended classes for nput class
 	 *
 	 * If any field is not mappable, the method will throw an exception.
-	 * @param bd
+	 * @param type `@Entity` class type
 	 * @return a schema derived from the `@Entity` class
 	 */
 	public static Field[] getAllFields(Class<?> type) {
