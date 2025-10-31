@@ -97,7 +97,7 @@ snapadmin.modelsPackage=your.models.package,your.second.models.package
 # snapadmin.enabledAppInternalDs=true
 #
 ## Set prefix for external datasource if it's not align with standard spring boot datasource
-# snapadmin.appInternalDsSettingsPrefix=spring.lotcore
+# snapadmin.appInternalDsSettingsPrefix=spring.somedatasource
 ```
 
 **IMPORTANT**: The configuration prefix is `snapadmin.`
