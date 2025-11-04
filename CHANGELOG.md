@@ -1,4 +1,13 @@
 # Changelog
+**1.0.1**
+
+UPDATES:
+- Spring boot updated to version 3.5.7 for security purposes and native supporting `mvn clean install` with new bytebuddy version'
+
+TODO:
+- support an edition of entities with composite primary keys (for now available just in table review mode);
+
+
 **1.0.0**
 
 FIXES:
