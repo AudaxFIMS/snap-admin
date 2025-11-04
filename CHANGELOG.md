@@ -1,11 +1,13 @@
+# Planned features
+
+TODO:
+- support an edition of entities with composite primary keys (for now available just in table review mode);
+
 # Changelog
 **1.0.1**
 
 UPDATES:
 - Spring boot updated to version 3.5.7 for security purposes and native supporting `mvn clean install` with a new bytebuddy version
-
-TODO:
-- support an edition of entities with composite primary keys (for now available just in table review mode);
 
 **1.0.0**
 
@@ -23,6 +25,3 @@ FIXES:
 FEATURES:
 - added logout button for security mode;
 - added functionality for storing Snapadmin service data into the same DB with the application (for that we should set 'enabledAppInternalDs: true' and if it's not a standard DS, then set settings prefix 'appInternalDsSettingsPrefix: spring.customdatasource');
-
-TODO:
-- support an edition of entities with composite primary keys (for now available just in table review mode);
