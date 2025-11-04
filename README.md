@@ -1,8 +1,8 @@
 # This project is from the original project located here: [https://github.com/aileftech/snap-admin](https://github.com/aileftech/snap-admin)
 
+## Unfortunately an original project isn't actively supported anymore and has few bugs related to new Spring Boot security improvements that's why this project was created on my own account.
 
-## Unfortunately original project not actively supported anymore and has few bugs related wirg new Spring Boot security improvements that's why this project was created on my own account.
-
+## Updates in the current fork can be found here: [CHANGELOG.md](CHANGELOG.md)
 
 > The project has been recently renamed from 'Spring Boot Database Admin' to 'SnapAdmin'.
 > If you were already using 'Spring Boot Database Admin' make sure to update your `pom.xml` and other
@@ -57,7 +57,7 @@ The code is still in a very early stage and it might not be robust if you use no
 <dependency>
 	<groupId>dev.semeshin</groupId>
 	<artifactId>snap-admin</artifactId>
-	<version>1.0.0</version>
+	<version>1.0.1</version>
 </dependency>
 ```
 
@@ -68,36 +68,35 @@ which provides a sample database and already configured code. Should work for cu
 Otherwise, go ahead and add these to your `application.properties` file:
 
 ```properties
-## SnapAdmin is not enabled by default
-snapadmin.enabled=true
-
-## The first-level part of the URL path: http://localhost:8080/${baseUrl}/
-snapadmin.baseUrl=admin
-
-## The package(s) that contain your @Entity classes
-## accepts multiple comma separated values
-snapadmin.modelsPackage=your.models.package,your.second.models.package
-
 ## At the moment, it's required to have open-in-view set to true.
-# spring.jpa.open-in-view=true
+## Should be enabled for your custom data-source if it's required
+# spring.jpa.open-in-view: true
 
-## OPTIONAL PARAMETERS
-
-## Whether to enable SnapAdmin
-# snapadmin.enabled=true
-#
-## Set to true if you need to run the tests, as it will customize
-## the database configuration for the internal DataSource
-# snapadmin.testMode=false
-#
-## SQL console enable/disable (true by default)
-# snapadmin.sqlConsoleEnabled=false
-#
-## Set to true if you need to use external datasource for storing Snapadmin service data
-# snapadmin.enabledAppInternalDs=true
-#
-## Set prefix for external datasource if it's not align with standard spring boot datasource
-# snapadmin.appInternalDsSettingsPrefix=spring.somedatasource
+snapadmin:
+    ## SnapAdmin is not enabled by default
+    enabled: true
+    ## Set to true if you need to run the tests, as it will customize
+    ## the database configuration for the internal DataSource
+    testMode: true
+    ## The first-level part of the URL path: http://localhost:8080/${baseUrl}/
+    baseUrl: snap-admin
+    ## The package(s) that contain your @Entity classes
+    ## accepts multiple comma separated values
+    modelsPackage: your.models.package,your.second.models.package
+    ## SQL console enable/disable (true by default)
+    sqlConsoleEnabled: true
+    ## Set to true if you need to use external datasource for storing Snapadmin service data
+    enabledAppInternalDs: true
+    ## Set prefix for external datasource if it's not align with standard spring boot datasource
+    appInternalDsSettingsPrefix: snapadmin
+    ## Setting for an internal data-source
+    ## Not required if you already have settings for DS which you want to use for internal tables and 
+    ## "appInternalDsSettingsPrefix" have the right prefix like "appInternalDsSettingsPrefix: spring"
+    datasource:
+        jdbc-url: jdbc:postgresql://postgresql:5544/dbname?currentSchema=internal_schema
+        driver-class-name: org.postgresql.Driver
+    jpa:
+        database-platform: org.hibernate.dialect.PostgreSQLDialect
 ```
 
 **IMPORTANT**: The configuration prefix is `snapadmin.`
@@ -124,22 +123,3 @@ If you find a problem or a bug, please report it as an issue. When doing so, inc
  * provide the full stack trace of the error
  * specify if you are using any particular configuration either in your `application.properties` or through annotations
  * if the problem occurs at startup, enable `DEBUG`-level logs and report what `grep SnapAdmin` returns
-
-## Updates in current fork
-
-**Version 1.0.0**
-
-FIXES:
-- SPEL expression execution throws exceptions in new Spring boot (relates with new introduced security in Spring boot for SPEL)
-- UUID field type parsing;
-- pagination and parametrized queries;
-- OffsetDateTimeFieldType parser;
-- collect all fields for entity (before extended class fields was missed);
-- collect all getters and setters for entity;
-- settings page;
-- Entity record creation with field types (timestamp);
-- entity record search engine;
-
-FEATURES:
-- added logout button for security mode;
-- added functionality for storing Snapadmin service data into the same DB with the application (for that we should set 'enabledAppInternalDs: true' and if it's not a standard DS, then set settings prefix 'appInternalDsSettingsPrefix: spring.customdatasource');
