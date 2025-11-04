@@ -7,7 +7,6 @@ UPDATES:
 TODO:
 - support an edition of entities with composite primary keys (for now available just in table review mode);
 
-
 **1.0.0**
 
 FIXES:
@@ -24,7 +23,6 @@ FIXES:
 FEATURES:
 - added logout button for security mode;
 - added functionality for storing Snapadmin service data into the same DB with the application (for that we should set 'enabledAppInternalDs: true' and if it's not a standard DS, then set settings prefix 'appInternalDsSettingsPrefix: spring.customdatasource');
-
 
 TODO:
 - support an edition of entities with composite primary keys (for now available just in table review mode);
