@@ -191,6 +191,7 @@ public class SnapAdmin {
 						// Extract fields from the embedded ID class and add them as primary key fields
 						Class<?> embeddedIdType = f.getType();
 						Field[] embeddedFields = embeddedIdType.getDeclaredFields();
+						String embeddedIdFieldName = f.getName(); // Store the @EmbeddedId field name
 
 						for (Field embeddedField : embeddedFields) {
 							try {
@@ -198,8 +199,9 @@ public class SnapAdmin {
 								field.setSchema(schema);
 								field.setPrimaryKey(true);
 								field.setNullable(false);
+								field.setEmbeddedIdFieldName(embeddedIdFieldName); // Mark as part of @EmbeddedId
 								schema.addField(field);
-								logger.debug("Added embedded ID field: " + embeddedField.getName() + " as primary key");
+								logger.debug("Added embedded ID field: " + embeddedField.getName() + " as primary key (from @EmbeddedId field: " + embeddedIdFieldName + ")");
 							} catch (UnsupportedFieldTypeException e) {
 								logger.warn("Unable to map embedded ID field: " + embeddedField.getName());
 							}

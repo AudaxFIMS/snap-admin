@@ -82,7 +82,12 @@ public class DbField {
 	 */
 	@JsonIgnore
 	private DbObjectSchema schema;
-	
+
+	/**
+	 * If this field is part of an @EmbeddedId, stores the java name of the @EmbeddedId field
+	 */
+	private String embeddedIdFieldName;
+
 	public DbField(String javaName, String name, Field field, DbFieldType type, DbObjectSchema schema, String format) {
 		this.javaName = javaName;
 		this.dbName = name;
@@ -142,7 +147,19 @@ public class DbField {
 	public boolean isPrimaryKey() {
 		return primaryKey;
 	}
-	
+
+	public String getEmbeddedIdFieldName() {
+		return embeddedIdFieldName;
+	}
+
+	public void setEmbeddedIdFieldName(String embeddedIdFieldName) {
+		this.embeddedIdFieldName = embeddedIdFieldName;
+	}
+
+	public boolean isPartOfEmbeddedId() {
+		return embeddedIdFieldName != null;
+	}
+
 	public Class<?> getConnectedType() {
 		return connectedType;
 	}

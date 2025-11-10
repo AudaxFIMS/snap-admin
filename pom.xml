@@ -12,7 +12,7 @@
 
 	<groupId>dev.semeshin</groupId>
 	<artifactId>snap-admin</artifactId>
-	<version>1.0.2-SNAPSOT</version>
+	<version>1.0.2-SNAPSHOT</version>
 	<packaging>jar</packaging>
 
 	<name>SnapAdmin</name>

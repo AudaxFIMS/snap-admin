@@ -102,15 +102,52 @@ public class DbObject {
 	}
 	
 	public DbFieldValue get(String name) {
+		DbField dbField = schema.getFieldByJavaName(name);
+
+		// Special handling for fields that are part of @EmbeddedId
+		if (dbField != null && dbField.isPartOfEmbeddedId()) {
+			try {
+				// First, get the @EmbeddedId field value
+				String embeddedIdFieldName = dbField.getEmbeddedIdFieldName();
+				Method embeddedIdGetter = findGetter(embeddedIdFieldName);
+
+				if (embeddedIdGetter == null) {
+					throw new SnapAdminException("Unable to find getter for @EmbeddedId field `"
+						+ embeddedIdFieldName + "` in class " + instance.getClass());
+				}
+
+				Object embeddedIdValue = embeddedIdGetter.invoke(instance);
+
+				if (embeddedIdValue == null) {
+					return new DbFieldValue(null, dbField);
+				}
+
+				// Then, get the actual field value from the embedded ID object
+				Method fieldGetter = findGetterInClass(name, embeddedIdValue.getClass());
+
+				if (fieldGetter == null) {
+					throw new SnapAdminException("Unable to find getter for field `"
+						+ name + "` in @EmbeddedId class " + embeddedIdValue.getClass());
+				}
+
+				Object result = fieldGetter.invoke(embeddedIdValue);
+				return new DbFieldValue(result, dbField);
+
+			} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+				throw new SnapAdminException(e);
+			}
+		}
+
+		// Normal field handling
 		Method getter = findGetter(name);
-		
+
 		if (getter == null)
 			throw new SnapAdminException("Unable to find getter method for field `"
 				+ name + "` in class " + instance.getClass());
 
 		try {
 			Object result = getter.invoke(instance);
-			return new DbFieldValue(result, schema.getFieldByJavaName(name));
+			return new DbFieldValue(result, dbField);
 		} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
 			throw new SnapAdminException(e);
 		}
@@ -300,17 +337,35 @@ public class DbObject {
 
 		DbField dbField = schema.getFieldByJavaName(fieldName);
 		if (dbField == null) return null;
-		
+
 		String prefix = "get";
 		if (dbField.getType() instanceof BooleanFieldType) {
 			prefix = "is";
 		}
-		
+
 		for (Method m : methods) {
 			if (m.getName().equalsIgnoreCase(prefix + fieldName))
 				return m;
 		}
-		
+
+		return null;
+	}
+
+	protected Method findGetterInClass(String fieldName, Class<?> clazz) {
+		List<Method> methods = getAllDeclaredMethods(clazz);
+
+		// Try "get" prefix first
+		for (Method m : methods) {
+			if (m.getName().equalsIgnoreCase("get" + fieldName))
+				return m;
+		}
+
+		// Try "is" prefix for boolean fields
+		for (Method m : methods) {
+			if (m.getName().equalsIgnoreCase("is" + fieldName))
+				return m;
+		}
+
 		return null;
 	}
 
