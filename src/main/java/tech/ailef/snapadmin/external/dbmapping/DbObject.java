@@ -46,6 +46,30 @@ public class DbObject {
 	}
 
 	public boolean has(DbField field) {
+		// Special handling for fields that are part of @EmbeddedId
+		if (field.isPartOfEmbeddedId()) {
+			String embeddedIdFieldName = field.getEmbeddedIdFieldName();
+			Method embeddedIdGetter = findGetter(embeddedIdFieldName);
+
+			if (embeddedIdGetter == null) {
+				return false;
+			}
+
+			try {
+				Object embeddedIdValue = embeddedIdGetter.invoke(instance);
+				if (embeddedIdValue == null) {
+					return false;
+				}
+
+				// Check if the field exists in the embedded ID class
+				Method fieldGetter = findGetterInClass(field.getJavaName(), embeddedIdValue.getClass());
+				return fieldGetter != null;
+			} catch (IllegalAccessException | InvocationTargetException e) {
+				return false;
+			}
+		}
+
+		// Normal field handling
 		return findGetter(field.getJavaName()) != null;
 	}
 	

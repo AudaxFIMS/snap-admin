@@ -138,4 +138,21 @@ public class CompositeKeyTest {
 		assertEquals(99L, userRoleId.getUserId());
 		assertEquals("USER", userRoleId.getRoleCode());
 	}
+
+	@Test
+	public void testGetCompositeKeyFields() {
+		var embeddedIdFields = CompositeKeyUtils.getCompositeKeyFields(OrderEntity.class);
+		assertEquals(2, embeddedIdFields.size());
+
+		var embeddedFieldNames = embeddedIdFields.stream().map(java.lang.reflect.Field::getName).toList();
+		assertTrue(embeddedFieldNames.contains("customerId"));
+		assertTrue(embeddedFieldNames.contains("orderNumber"));
+
+		var idClassFields = CompositeKeyUtils.getCompositeKeyFields(UserRole.class);
+		assertEquals(2, idClassFields.size());
+
+		var idClassFieldNames = idClassFields.stream().map(java.lang.reflect.Field::getName).toList();
+		assertTrue(idClassFieldNames.contains("userId"));
+		assertTrue(idClassFieldNames.contains("roleCode"));
+	}
 }
