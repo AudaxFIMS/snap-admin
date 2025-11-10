@@ -332,7 +332,29 @@ public class SnapAdminRepository {
 	}
 
 	private Object parsePrimaryKey(DbObjectSchema schema, Object rawId) {
-		DbField idField = schema.getPrimaryKey();
-		return idField.getType().parseValue(rawId);
+		if (schema.hasCompositeKey() || schema.hasMultiplePrimaryKeys()) {
+			// Handle composite keys
+			String rawIdString = rawId.toString();
+
+			// Check if it's already in composite key format (field1:value1,field2:value2)
+			if (rawIdString.contains(":")) {
+				CompositeKey compositeKey = CompositeKeyUtils.parseFromUrl(rawIdString, schema);
+
+				// Create the appropriate key instance based on type
+				if (CompositeKeyUtils.hasEmbeddedId(schema.getJavaClass())) {
+					return CompositeKeyUtils.createEmbeddedIdInstance(compositeKey, schema.getJavaClass());
+				} else if (CompositeKeyUtils.hasIdClass(schema.getJavaClass())) {
+					return CompositeKeyUtils.createIdClassInstance(compositeKey, schema.getJavaClass());
+				}
+			}
+
+			// Fallback: if raw ID doesn't contain ':', try to parse as first key field only
+			DbField firstKeyField = schema.getPrimaryKey();
+			return firstKeyField.getType().parseValue(rawId);
+		} else {
+			// Handle simple primary keys
+			DbField idField = schema.getPrimaryKey();
+			return idField.getType().parseValue(rawId);
+		}
 	}
 }

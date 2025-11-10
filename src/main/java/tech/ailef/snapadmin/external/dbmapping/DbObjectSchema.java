@@ -306,9 +306,13 @@ public class DbObjectSchema {
 	}
 	
 	/**
-	 * Returns the DbField which serves as the primary key for this schema
-	 * @return
+	 * Returns the DbField which serves as the primary key for this schema.
+	 * For composite keys, returns the first primary key field.
+	 *
+	 * @deprecated For entities with composite keys, use {@link #getPrimaryKeys()} instead
+	 * @return the primary key field
 	 */
+	@Deprecated
 	@JsonIgnore
 	public DbField getPrimaryKey() {
 		Optional<DbField> pk = fields.stream().filter(f -> f.isPrimaryKey()).findFirst();
@@ -316,6 +320,41 @@ public class DbObjectSchema {
 			return pk.get();
 		else
 			throw new RuntimeException("No primary key defined on " + entityClass.getName() + " (table `" + tableName + "`)");
+	}
+
+	/**
+	 * Returns all DbFields that serve as primary keys for this schema.
+	 * For simple primary keys, returns a list with a single element.
+	 * For composite keys (@EmbeddedId or @IdClass), returns all key fields.
+	 *
+	 * @return list of primary key fields
+	 */
+	@JsonIgnore
+	public List<DbField> getPrimaryKeys() {
+		List<DbField> pks = fields.stream()
+			.filter(DbField::isPrimaryKey)
+			.collect(Collectors.toList());
+
+		if (pks.isEmpty())
+			throw new RuntimeException("No primary key defined on " + entityClass.getName() + " (table `" + tableName + "`)");
+
+		return pks;
+	}
+
+	/**
+	 * Checks if this schema uses a composite primary key
+	 * @return true if the entity uses @EmbeddedId or @IdClass
+	 */
+	public boolean hasCompositeKey() {
+		return CompositeKeyUtils.hasCompositeKey(entityClass);
+	}
+
+	/**
+	 * Checks if this schema has multiple primary key fields
+	 * @return true if there are multiple fields marked as primary key
+	 */
+	public boolean hasMultiplePrimaryKeys() {
+		return fields.stream().filter(DbField::isPrimaryKey).count() > 1;
 	}
 	
 	/**

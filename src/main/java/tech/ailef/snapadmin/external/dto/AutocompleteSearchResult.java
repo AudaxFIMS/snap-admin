@@ -25,7 +25,9 @@ public class AutocompleteSearchResult {
 	}
 	
 	public AutocompleteSearchResult(DbObject o) {
-		this.id = o.getPrimaryKeyValue();
+		// For composite keys, use URL string representation
+		// For simple keys, getPrimaryKeyUrlString() returns just the value
+		this.id = o.getPrimaryKeyUrlString();
 		this.value = o.getDisplayName();
 	}
 	

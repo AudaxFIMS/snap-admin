@@ -119,16 +119,62 @@ public class DbObject {
 	public Object getPrimaryKeyValue() {
 		DbField primaryKeyField = schema.getPrimaryKey();
 		Method getter = findGetter(primaryKeyField.getJavaName());
-		
+
 		if (getter == null)
 			throw new SnapAdminException("Unable to find getter method for field `"
 				+ primaryKeyField.getJavaName() + "` in class " + instance.getClass());
-		
+
 		try {
 			Object result = getter.invoke(instance);
 			return result;
 		} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
 			throw new SnapAdminException(e);
+		}
+	}
+
+	/**
+	 * Gets the composite primary key value from this object.
+	 * For entities with @EmbeddedId or @IdClass, extracts all key field values.
+	 * For simple primary keys, creates a CompositeKey with a single field.
+	 *
+	 * @return CompositeKey with all primary key field values
+	 */
+	public CompositeKey getCompositeKeyValue() {
+		if (schema.hasCompositeKey() || schema.hasMultiplePrimaryKeys()) {
+			return CompositeKeyUtils.extractCompositeKey(instance, schema.getJavaClass());
+		} else {
+			// For simple primary keys, create a CompositeKey with single field
+			DbField primaryKeyField = schema.getPrimaryKey();
+			Object pkValue = getPrimaryKeyValue();
+
+			CompositeKey key = new CompositeKey();
+			key.put(primaryKeyField.getName(), pkValue);
+			return key;
+		}
+	}
+
+	/**
+	 * Gets the composite primary key value as a URL-safe string.
+	 * Format: field1:value1,field2:value2,...
+	 *
+	 * @return URL-safe string representation of the composite key
+	 */
+	public String getCompositeKeyUrlString() {
+		return getCompositeKeyValue().toUrlString();
+	}
+
+	/**
+	 * Gets the primary key value as a URL-safe string.
+	 * For simple keys, returns just the value.
+	 * For composite keys, returns the formatted composite key string.
+	 *
+	 * @return URL-safe string representation of the primary key
+	 */
+	public String getPrimaryKeyUrlString() {
+		if (schema.hasCompositeKey() || schema.hasMultiplePrimaryKeys()) {
+			return getCompositeKeyUrlString();
+		} else {
+			return getPrimaryKeyValue().toString();
 		}
 	}
 	
