@@ -442,27 +442,61 @@ public class SnapAdminController {
 		boolean create = Boolean.parseBoolean(c);
 		
 		DbObjectSchema schema = snapAdmin.findSchemaByClassName(className);
-		
+
 		if (!schema.isCreateEnabled() && create) {
 			attr.addFlashAttribute("errorTitle", "Unauthorized");
 			attr.addFlashAttribute("error", "CREATE operations have been disabled on this type (" + schema.getSimpleClassName() + ").");
 			return "redirect:/" + properties.getBaseUrl() + "/model/" + className;
 		}
 
-		String pkValue = params.get(schema.getPrimaryKey().getName());
-		if (pkValue == null || pkValue.isBlank()) {
-			pkValue = null;
+		// Handle composite keys and simple keys differently
+		String pkValue = null;
+		if (schema.hasCompositeKey() || schema.hasMultiplePrimaryKeys()) {
+			// For composite keys, collect all PK fields and build URL string
+			List<String> pkParts = new ArrayList<>();
+			for (tech.ailef.snapadmin.external.dbmapping.fields.DbField pkField : schema.getPrimaryKeys()) {
+				String fieldValue = params.get(pkField.getName());
+				if (fieldValue != null && !fieldValue.isBlank()) {
+					pkParts.add(pkField.getName() + ":" + fieldValue);
+				}
+			}
+			if (!pkParts.isEmpty()) {
+				pkValue = String.join(",", pkParts);
+			}
+		} else {
+			// For simple keys, get the single PK field value
+			pkValue = params.get(schema.getPrimaryKey().getName());
+			if (pkValue == null || pkValue.isBlank()) {
+				pkValue = null;
+			}
 		}
-		
+
 		try {
 			if (pkValue == null) {
 				Object newPrimaryKey = repository.create(schema, params, files, pkValue);
-				repository.attachManyToMany(schema, newPrimaryKey, multiValuedParams);				
+				repository.attachManyToMany(schema, newPrimaryKey, multiValuedParams);
 				pkValue = newPrimaryKey.toString();
 				attr.addFlashAttribute("message", "Item created successfully.");
 				saveAction(new UserAction(schema.getTableName(), pkValue, "CREATE", schema.getClassName(), authUser));
 			} else {
-				Object parsedPkValue = schema.getPrimaryKey().getType().parseValue(pkValue);
+				// Parse PK value correctly for composite and simple keys
+				Object parsedPkValue;
+				if (schema.hasCompositeKey() || schema.hasMultiplePrimaryKeys()) {
+					// For composite keys, parse the URL string
+					tech.ailef.snapadmin.external.dbmapping.CompositeKey compositeKey =
+						tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.parseFromUrl(pkValue, schema);
+
+					if (tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.hasEmbeddedId(schema.getJavaClass())) {
+						parsedPkValue = tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.createEmbeddedIdInstance(compositeKey, schema.getJavaClass());
+					} else if (tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.hasIdClass(schema.getJavaClass())) {
+						parsedPkValue = tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.createIdClassInstance(compositeKey, schema.getJavaClass());
+					} else {
+						throw new tech.ailef.snapadmin.external.exceptions.SnapAdminException("Entity has multiple primary keys but no @EmbeddedId or @IdClass");
+					}
+				} else {
+					// For simple keys, parse as before
+					parsedPkValue = schema.getPrimaryKey().getType().parseValue(pkValue);
+				}
 
 				Optional<DbObject> object = repository.findById(schema, parsedPkValue);
 				
