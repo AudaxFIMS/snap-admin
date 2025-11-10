@@ -360,16 +360,27 @@ public class DbObject {
 		List<Method> methods = getAllDeclaredMethods(instance.getClass());
 
 		DbField dbField = schema.getFieldByJavaName(fieldName);
-		if (dbField == null) return null;
 
-		String prefix = "get";
-		if (dbField.getType() instanceof BooleanFieldType) {
-			prefix = "is";
+		// If DbField exists and is boolean, try "is" prefix first
+		if (dbField != null && dbField.getType() instanceof BooleanFieldType) {
+			for (Method m : methods) {
+				if (m.getName().equalsIgnoreCase("is" + fieldName))
+					return m;
+			}
 		}
 
+		// Try "get" prefix (works for all types including when dbField is null)
 		for (Method m : methods) {
-			if (m.getName().equalsIgnoreCase(prefix + fieldName))
+			if (m.getName().equalsIgnoreCase("get" + fieldName))
 				return m;
+		}
+
+		// If dbField is null (e.g., @EmbeddedId field), also try "is" prefix
+		if (dbField == null) {
+			for (Method m : methods) {
+				if (m.getName().equalsIgnoreCase("is" + fieldName))
+					return m;
+			}
 		}
 
 		return null;
