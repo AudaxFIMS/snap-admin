@@ -9,6 +9,7 @@
 
 package tech.ailef.snapadmin.external.dbmapping;
 
+import java.lang.reflect.Field;
 import java.sql.ResultSetMetaData;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -332,7 +333,67 @@ public class SnapAdminRepository {
 	}
 
 	private Object parsePrimaryKey(DbObjectSchema schema, Object rawId) {
-		DbField idField = schema.getPrimaryKey();
-		return idField.getType().parseValue(rawId);
+		if (schema.hasCompositeKey() || schema.hasMultiplePrimaryKeys()) {
+			// Check if rawId is already the correct composite key object type
+			if (CompositeKeyUtils.hasEmbeddedId(schema.getJavaClass())) {
+				Field embeddedIdField = CompositeKeyUtils.getEmbeddedIdField(schema.getJavaClass());
+				if (embeddedIdField != null && embeddedIdField.getType().isInstance(rawId)) {
+					// Already the correct @EmbeddedId type, return as-is
+					return rawId;
+				}
+			} else if (CompositeKeyUtils.hasIdClass(schema.getJavaClass())) {
+				Class<?> idClassType = CompositeKeyUtils.getIdClassType(schema.getJavaClass());
+				if (idClassType != null && idClassType.isInstance(rawId)) {
+					// Already the correct @IdClass type, return as-is
+					return rawId;
+				}
+			}
+
+			// Check if rawId is a CompositeKey object
+			if (rawId instanceof CompositeKey) {
+				CompositeKey compositeKey = (CompositeKey) rawId;
+				// Create the appropriate key instance based on type
+				if (CompositeKeyUtils.hasEmbeddedId(schema.getJavaClass())) {
+					return CompositeKeyUtils.createEmbeddedIdInstance(compositeKey, schema.getJavaClass());
+				} else if (CompositeKeyUtils.hasIdClass(schema.getJavaClass())) {
+					return CompositeKeyUtils.createIdClassInstance(compositeKey, schema.getJavaClass());
+				}
+			}
+
+			// Handle composite keys - parse from string (base64 or legacy format)
+			String rawIdString = rawId.toString();
+
+			try {
+				// Try to parse as composite key (handles both base64 and legacy format)
+				CompositeKey compositeKey = CompositeKeyUtils.parseFromUrl(rawIdString, schema);
+
+				// Create the appropriate key instance based on type
+				if (CompositeKeyUtils.hasEmbeddedId(schema.getJavaClass())) {
+					return CompositeKeyUtils.createEmbeddedIdInstance(compositeKey, schema.getJavaClass());
+				} else if (CompositeKeyUtils.hasIdClass(schema.getJavaClass())) {
+					return CompositeKeyUtils.createIdClassInstance(compositeKey, schema.getJavaClass());
+				}
+			} catch (SnapAdminException e) {
+				// Fallback: try to parse as first key field only
+				DbField firstKeyField = schema.getPrimaryKey();
+				return firstKeyField.getType().parseValue(rawId);
+			}
+
+			throw new SnapAdminException("Unable to parse composite key: " + rawIdString);
+		} else {
+			// Handle simple primary keys
+			DbField idField = schema.getPrimaryKey();
+
+			// Try to decode from base64 first (new format)
+			String rawIdString = rawId.toString();
+			try {
+				byte[] decodedBytes = java.util.Base64.getUrlDecoder().decode(rawIdString);
+				String decodedValue = new String(decodedBytes);
+				return idField.getType().parseValue(decodedValue);
+			} catch (IllegalArgumentException e) {
+				// Not base64, parse as-is (backward compatibility)
+				return idField.getType().parseValue(rawId);
+			}
+		}
 	}
 }

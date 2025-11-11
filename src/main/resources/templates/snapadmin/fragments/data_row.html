@@ -5,16 +5,16 @@
 		<tr th:fragment="data_row(row, selectable)" class="table-data-row">
 			<td th:if=${selectable} class="table-checkbox">
 				<input type="checkbox" class="form-check-input" name="ids"
-					th:value="${row.getPrimaryKeyValue()}" form="multi-delete-form"
+					th:value="${row.getPrimaryKeyUrlString()}" form="multi-delete-form"
 					th:classAppend="|${!schema.isDeleteEnabled() ? 'disable' : ''}|">
 			</td>
 			<td class="text-center row-icons">
 				<a class="ps-1"
-					th:classAppend="|${!schema.isEditEnabled() ? 'disable' : ''}|" 
-					th:href="|/${snapadmin_baseUrl}/model/${schema.getJavaClass().getName()}/edit/${row.getPrimaryKeyValue()}|">
+					th:classAppend="|${!schema.isEditEnabled() ? 'disable' : ''}|"
+					th:href="|/${snapadmin_baseUrl}/model/${schema.getJavaClass().getName()}/edit/${row.getPrimaryKeyUrlEncoded()}|">
 					<i class="bi bi-pencil-square"></i></a>
-				<form class="delete-form" method="POST" 
-					th:action="|/${snapadmin_baseUrl}/model/${schema.getJavaClass().getName()}/delete/${row.getPrimaryKeyValue()}|">
+				<form class="delete-form" method="POST"
+					th:action="|/${snapadmin_baseUrl}/model/${schema.getJavaClass().getName()}/delete/${row.getPrimaryKeyUrlEncoded()}|">
 					<button th:class="|${!schema.isDeleteEnabled() ? 'disable' : ''}|"><i class="bi bi-trash"></i></button>
 				</form>
 			</td>
@@ -37,7 +37,7 @@
 		<!-- data-row-field fragment -->
 		<th:block th:fragment="data_row_field(field, object)">
 			<th:block th:if="${field.getConnectedType() != null && object.traverse(field) != null}">
-				<a th:href="|/${snapadmin_baseUrl}/model/${field.getConnectedType().getName()}/show/${object.traverse(field).getPrimaryKeyValue()}|">
+				<a th:href="|/${snapadmin_baseUrl}/model/${field.getConnectedType().getName()}/show/${object.traverse(field).getPrimaryKeyUrlEncoded()}|">
 					<span th:text="${object.has(field) ? object.traverse(field).getPrimaryKeyValue() : 'NULL'}"></span>
 				</a>
 				<p class="p-0 m-0"
@@ -45,7 +45,7 @@
 			</th:block>
 			<th:block th:if="${field.getConnectedType() == null}">
 				<th:block th:if="${field.isPrimaryKey()}">
-					<a th:href="|/${snapadmin_baseUrl}/model/${schema.getClassName()}/show/${object.get(field).getValue()}|">
+					<a th:href="|/${snapadmin_baseUrl}/model/${schema.getClassName()}/show/${object.getPrimaryKeyUrlEncoded()}|">
 						<span th:text="${object.get(field).getFormattedValue()}">
 						</span>
 					</a>
@@ -65,13 +65,13 @@
 					<span th:unless="${!field.isBinary()}">
 						<th:block th:if="${object.get(field).getValue()}">
 							<div th:if="${field.isImage()}" class="mb-2">
-								<img class="thumb-image" 
-									th:src="|/${snapadmin_baseUrl}/download/${schema.getClassName()}/${field.getJavaName()}/${object.getPrimaryKeyValue()}/image|">
+								<img class="thumb-image"
+									th:src="|/${snapadmin_baseUrl}/download/${schema.getClassName()}/${field.getJavaName()}/${object.getPrimaryKeyUrlEncoded()}/image|">
 							</div>
-						
-							<a class="text-decoration-none null-label" 
-								th:href="|/${snapadmin_baseUrl}/download/${schema.getClassName()}/${field.getJavaName()}/${object.getPrimaryKeyValue()}|">
-								<i class="align-middle bi bi-box-arrow-down"></i><span class="align-middle"> Download 
+
+							<a class="text-decoration-none null-label"
+								th:href="|/${snapadmin_baseUrl}/download/${schema.getClassName()}/${field.getJavaName()}/${object.getPrimaryKeyUrlEncoded()}|">
+								<i class="align-middle bi bi-box-arrow-down"></i><span class="align-middle"> Download
 								<!--/*--> <span class="text-muted">([[ ${object.get(field).getValue().length} ]] bytes)</span> <!--*/-->
 								</span>
 							</a>

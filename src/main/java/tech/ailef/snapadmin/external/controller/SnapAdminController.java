@@ -47,6 +47,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.ConstraintViolationException;
 import tech.ailef.snapadmin.external.SnapAdmin;
 import tech.ailef.snapadmin.external.SnapAdminProperties;
+import tech.ailef.snapadmin.external.dbmapping.CompositeKey;
 import tech.ailef.snapadmin.external.dbmapping.DbObject;
 import tech.ailef.snapadmin.external.dbmapping.DbObjectSchema;
 import tech.ailef.snapadmin.external.dbmapping.SnapAdminRepository;
@@ -251,12 +252,44 @@ public class SnapAdminController {
 	 * @param id
 	 * @return
 	 */
+	/**
+	 * Helper method to parse primary key value from URL string.
+	 * Handles both simple and composite keys.
+	 */
+	private Object parsePrimaryKeyFromUrl(DbObjectSchema schema, String id) {
+		if (schema.hasCompositeKey() || schema.hasMultiplePrimaryKeys()) {
+			// For composite keys, parse the URL string
+			tech.ailef.snapadmin.external.dbmapping.CompositeKey compositeKey =
+				tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.parseFromUrl(id, schema);
+
+			if (tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.hasEmbeddedId(schema.getJavaClass())) {
+				return tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.createEmbeddedIdInstance(compositeKey, schema.getJavaClass());
+			} else if (tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.hasIdClass(schema.getJavaClass())) {
+				return tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.createIdClassInstance(compositeKey, schema.getJavaClass());
+			} else {
+				throw new tech.ailef.snapadmin.external.exceptions.SnapAdminException("Entity has multiple primary keys but no @EmbeddedId or @IdClass");
+			}
+		} else {
+			// For simple keys, decode from base64 first (new format), then parse
+			String decodedId = id;
+			try {
+				// Try to decode as base64 first
+				byte[] decodedBytes = java.util.Base64.getUrlDecoder().decode(id);
+				decodedId = new String(decodedBytes);
+			} catch (IllegalArgumentException e) {
+				// Not base64, use as-is (backward compatibility)
+				decodedId = id;
+			}
+			return schema.getPrimaryKey().getType().parseValue(decodedId);
+		}
+	}
+
 	@GetMapping("/model/{className}/show/{id}")
 	public String show(Model model, @PathVariable String className, @PathVariable String id) {
 		DbObjectSchema schema = snapAdmin.findSchemaByClassName(className);
-		
-		Object pkValue = schema.getPrimaryKey().getType().parseValue(id);
-		
+
+		Object pkValue = parsePrimaryKeyFromUrl(schema, id);
+
 		DbObject object = repository.findById(schema, pkValue).orElseThrow(() -> {
 			return new SnapAdminNotFoundException(
 				schema.getSimpleClassName() + " with ID " + id + " not found."
@@ -294,15 +327,16 @@ public class SnapAdminController {
 	@GetMapping("/model/{className}/edit/{id}")
 	public String edit(Model model, @PathVariable String className, @PathVariable String id, RedirectAttributes attr) {
 		DbObjectSchema schema = snapAdmin.findSchemaByClassName(className);
-		
-		Object pkValue = schema.getPrimaryKey().getType().parseValue(id);
-		
+
+		// Parse PK value correctly for composite and simple keys
+		Object pkValue = parsePrimaryKeyFromUrl(schema, id);
+
 		if (!schema.isEditEnabled()) {
 			attr.addFlashAttribute("errorTitle", "Unauthorized");
 			attr.addFlashAttribute("error", "EDIT operations have been disabled on this type (" + schema.getSimpleClassName() + ").");
 			return "redirect:/" + properties.getBaseUrl() + "/model/" + className;
 		}
-		
+
 		DbObject object = repository.findById(schema, pkValue).orElseThrow(() -> {
 			return new SnapAdminNotFoundException(
 			  "Object " + className + " with id " + id + " not found"
@@ -442,27 +476,101 @@ public class SnapAdminController {
 		boolean create = Boolean.parseBoolean(c);
 		
 		DbObjectSchema schema = snapAdmin.findSchemaByClassName(className);
-		
+
 		if (!schema.isCreateEnabled() && create) {
 			attr.addFlashAttribute("errorTitle", "Unauthorized");
 			attr.addFlashAttribute("error", "CREATE operations have been disabled on this type (" + schema.getSimpleClassName() + ").");
 			return "redirect:/" + properties.getBaseUrl() + "/model/" + className;
 		}
 
-		String pkValue = params.get(schema.getPrimaryKey().getName());
-		if (pkValue == null || pkValue.isBlank()) {
-			pkValue = null;
+		// Handle composite keys and simple keys differently
+		String pkValue = null;
+		if (schema.hasCompositeKey() || schema.hasMultiplePrimaryKeys()) {
+			// For composite keys, collect all PK fields and build URL string using JSON+base64
+			Map<String, Object> pkFieldsMap = new java.util.LinkedHashMap<>();
+			boolean hasAllFields = true;
+			for (tech.ailef.snapadmin.external.dbmapping.fields.DbField pkField : schema.getPrimaryKeys()) {
+				String fieldValue = params.get(pkField.getName());
+				logger.debug("Composite key field: {} = {}", pkField.getName(), fieldValue);
+				if (fieldValue != null && !fieldValue.isBlank()) {
+					pkFieldsMap.put(pkField.getName(), fieldValue);
+				} else {
+					hasAllFields = false;
+					break;
+				}
+			}
+			if (hasAllFields && !pkFieldsMap.isEmpty()) {
+				// Use JSON+base64 format to handle special characters
+				try {
+					com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+					String json = mapper.writeValueAsString(pkFieldsMap);
+					pkValue = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(json.getBytes());
+					logger.debug("Collected pkValue for composite key (base64): {}", pkValue);
+				} catch (Exception e) {
+					logger.error("Failed to encode composite key", e);
+					pkValue = null;
+				}
+			}
+		} else {
+			// For simple keys, get the single PK field value
+			pkValue = params.get(schema.getPrimaryKey().getName());
+			if (pkValue == null || pkValue.isBlank()) {
+				pkValue = null;
+			}
 		}
-		
+
 		try {
 			if (pkValue == null) {
 				Object newPrimaryKey = repository.create(schema, params, files, pkValue);
-				repository.attachManyToMany(schema, newPrimaryKey, multiValuedParams);				
-				pkValue = newPrimaryKey.toString();
+				repository.attachManyToMany(schema, newPrimaryKey, multiValuedParams);
+
+				// Convert the primary key to URL string format
+				if (schema.hasCompositeKey() || schema.hasMultiplePrimaryKeys()) {
+					// newPrimaryKey is already the composite key object (@EmbeddedId or @IdClass type)
+					// Extract values from it to build URL string
+					CompositeKey compositeKey = new CompositeKey();
+					Class<?> keyType = newPrimaryKey.getClass();
+					for (java.lang.reflect.Field field : keyType.getDeclaredFields()) {
+						if (java.lang.reflect.Modifier.isStatic(field.getModifiers()) ||
+							java.lang.reflect.Modifier.isTransient(field.getModifiers())) {
+							continue;
+						}
+						field.setAccessible(true);
+						try {
+							Object value = field.get(newPrimaryKey);
+							compositeKey.put(field.getName(), value);
+						} catch (IllegalAccessException e) {
+							throw new SnapAdminException("Failed to extract composite key", e);
+						}
+					}
+					pkValue = compositeKey.toUrlString(schema);
+				} else {
+					// Encode simple key to base64
+					String pkValueString = newPrimaryKey.toString();
+					pkValue = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(pkValueString.getBytes());
+				}
+
 				attr.addFlashAttribute("message", "Item created successfully.");
 				saveAction(new UserAction(schema.getTableName(), pkValue, "CREATE", schema.getClassName(), authUser));
 			} else {
-				Object parsedPkValue = schema.getPrimaryKey().getType().parseValue(pkValue);
+				// Parse PK value correctly for composite and simple keys
+				Object parsedPkValue;
+				if (schema.hasCompositeKey() || schema.hasMultiplePrimaryKeys()) {
+					// For composite keys, parse the URL string
+					tech.ailef.snapadmin.external.dbmapping.CompositeKey compositeKey =
+						tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.parseFromUrl(pkValue, schema);
+
+					if (tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.hasEmbeddedId(schema.getJavaClass())) {
+						parsedPkValue = tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.createEmbeddedIdInstance(compositeKey, schema.getJavaClass());
+					} else if (tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.hasIdClass(schema.getJavaClass())) {
+						parsedPkValue = tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.createIdClassInstance(compositeKey, schema.getJavaClass());
+					} else {
+						throw new tech.ailef.snapadmin.external.exceptions.SnapAdminException("Entity has multiple primary keys but no @EmbeddedId or @IdClass");
+					}
+				} else {
+					// For simple keys, parse as before
+					parsedPkValue = schema.getPrimaryKey().getType().parseValue(pkValue);
+				}
 
 				Optional<DbObject> object = repository.findById(schema, parsedPkValue);
 				
@@ -474,12 +582,53 @@ public class SnapAdminController {
 					} else {
 						repository.update(schema, params, files);
 						repository.attachManyToMany(schema, parsedPkValue, multiValuedParams);
+
+					// Encode pkValue for redirect URL
+					if (schema.hasCompositeKey() || schema.hasMultiplePrimaryKeys()) {
+						// For composite keys, extract and encode
+						tech.ailef.snapadmin.external.dbmapping.CompositeKey compositeKey =
+						tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.extractCompositeKey(
+							object.get().getUnderlyingInstance(), schema.getJavaClass()
+						);
+						pkValue = compositeKey.toUrlString(schema);
+					} else {
+						// For simple keys, encode to base64
+						String pkValueString = parsedPkValue.toString();
+						pkValue = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(pkValueString.getBytes());
+					}
 						attr.addFlashAttribute("message", "Item saved successfully.");
 						saveAction(new UserAction(schema.getTableName(), parsedPkValue.toString(), "EDIT", schema.getClassName(), authUser));
 					}
 				} else {
 					Object newPrimaryKey = repository.create(schema, params, files, pkValue);
 					repository.attachManyToMany(schema, newPrimaryKey, multiValuedParams);
+
+					// Update pkValue with the actual created key (in case it was generated)
+					if (schema.hasCompositeKey() || schema.hasMultiplePrimaryKeys()) {
+						// newPrimaryKey is already the composite key object (@EmbeddedId or @IdClass type)
+						// Extract values from it to build URL string
+						CompositeKey compositeKey = new CompositeKey();
+						Class<?> keyType = newPrimaryKey.getClass();
+						for (java.lang.reflect.Field field : keyType.getDeclaredFields()) {
+							if (java.lang.reflect.Modifier.isStatic(field.getModifiers()) ||
+								java.lang.reflect.Modifier.isTransient(field.getModifiers())) {
+								continue;
+							}
+							field.setAccessible(true);
+							try {
+								Object value = field.get(newPrimaryKey);
+								compositeKey.put(field.getName(), value);
+							} catch (IllegalAccessException e) {
+								throw new SnapAdminException("Failed to extract composite key", e);
+							}
+						}
+						pkValue = compositeKey.toUrlString(schema);
+					} else {
+					// Encode simple key to base64
+					String pkValueString = newPrimaryKey.toString();
+					pkValue = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(pkValueString.getBytes());
+					}
+
 					attr.addFlashAttribute("message", "Item created successfully");
 					saveAction(new UserAction(schema.getTableName(), pkValue, "CREATE", schema.getClassName(), authUser));
 				}
@@ -515,10 +664,13 @@ public class SnapAdminController {
 		if (attr.getFlashAttributes().containsKey("error")) {
 			if (create)
 				return "redirect:/" + properties.getBaseUrl() + "/model/" + schema.getClassName() + "/create";
-			else
-				return "redirect:/" + properties.getBaseUrl() + "/model/" + schema.getClassName() + "/edit/" + pkValue;
+			else {
+				String encodedPk = java.net.URLEncoder.encode(pkValue, java.nio.charset.StandardCharsets.UTF_8);
+				return "redirect:/" + properties.getBaseUrl() + "/model/" + schema.getClassName() + "/edit/" + encodedPk;
+			}
 		} else {
-			return "redirect:/" + properties.getBaseUrl() + "/model/" + schema.getClassName() + "/show/" + pkValue;
+			String encodedPk = java.net.URLEncoder.encode(pkValue, java.nio.charset.StandardCharsets.UTF_8);
+			return "redirect:/" + properties.getBaseUrl() + "/model/" + schema.getClassName() + "/show/" + encodedPk;
 		}
 	}
 	

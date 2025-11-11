@@ -4,6 +4,11 @@ TODO:
 - support an edition of entities with composite primary keys (for now available just in table review mode);
 
 # Changelog
+**1.0.2**
+
+UPDATES:
+- support an edition of entities with composite primary keys (@EmbeddedId and @IdClass)
+
 **1.0.1**
 
 UPDATES:

@@ -46,6 +46,30 @@ public class DbObject {
 	}
 
 	public boolean has(DbField field) {
+		// Special handling for fields that are part of @EmbeddedId
+		if (field.isPartOfEmbeddedId()) {
+			String embeddedIdFieldName = field.getEmbeddedIdFieldName();
+			Method embeddedIdGetter = findGetter(embeddedIdFieldName);
+
+			if (embeddedIdGetter == null) {
+				return false;
+			}
+
+			try {
+				Object embeddedIdValue = embeddedIdGetter.invoke(instance);
+				if (embeddedIdValue == null) {
+					return false;
+				}
+
+				// Check if the field exists in the embedded ID class
+				Method fieldGetter = findGetterInClass(field.getJavaName(), embeddedIdValue.getClass());
+				return fieldGetter != null;
+			} catch (IllegalAccessException | InvocationTargetException e) {
+				return false;
+			}
+		}
+
+		// Normal field handling
 		return findGetter(field.getJavaName()) != null;
 	}
 	
@@ -102,33 +126,159 @@ public class DbObject {
 	}
 	
 	public DbFieldValue get(String name) {
+		DbField dbField = schema.getFieldByJavaName(name);
+
+		// Special handling for fields that are part of @EmbeddedId
+		if (dbField != null && dbField.isPartOfEmbeddedId()) {
+			try {
+				// First, get the @EmbeddedId field value
+				String embeddedIdFieldName = dbField.getEmbeddedIdFieldName();
+				Method embeddedIdGetter = findGetter(embeddedIdFieldName);
+
+				if (embeddedIdGetter == null) {
+					throw new SnapAdminException("Unable to find getter for @EmbeddedId field `"
+						+ embeddedIdFieldName + "` in class " + instance.getClass());
+				}
+
+				Object embeddedIdValue = embeddedIdGetter.invoke(instance);
+
+				if (embeddedIdValue == null) {
+					return new DbFieldValue(null, dbField);
+				}
+
+				// Then, get the actual field value from the embedded ID object
+				Method fieldGetter = findGetterInClass(name, embeddedIdValue.getClass());
+
+				if (fieldGetter == null) {
+					throw new SnapAdminException("Unable to find getter for field `"
+						+ name + "` in @EmbeddedId class " + embeddedIdValue.getClass());
+				}
+
+				Object result = fieldGetter.invoke(embeddedIdValue);
+				return new DbFieldValue(result, dbField);
+
+			} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+				throw new SnapAdminException(e);
+			}
+		}
+
+		// Normal field handling
 		Method getter = findGetter(name);
-		
+
 		if (getter == null)
 			throw new SnapAdminException("Unable to find getter method for field `"
 				+ name + "` in class " + instance.getClass());
 
 		try {
 			Object result = getter.invoke(instance);
-			return new DbFieldValue(result, schema.getFieldByJavaName(name));
+			return new DbFieldValue(result, dbField);
 		} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
 			throw new SnapAdminException(e);
 		}
 	}
 	
 	public Object getPrimaryKeyValue() {
+		// For composite keys (@EmbeddedId or @IdClass), return the entire key object
+		if (schema.hasCompositeKey() || schema.hasMultiplePrimaryKeys()) {
+			if (CompositeKeyUtils.hasEmbeddedId(schema.getJavaClass())) {
+				// For @EmbeddedId, get the embedded ID field value
+				java.lang.reflect.Field embeddedIdField = CompositeKeyUtils.getEmbeddedIdField(schema.getJavaClass());
+				if (embeddedIdField != null) {
+					Method getter = findGetter(embeddedIdField.getName());
+					if (getter == null) {
+						throw new SnapAdminException("Unable to find getter method for @EmbeddedId field `"
+							+ embeddedIdField.getName() + "` in class " + instance.getClass());
+					}
+					try {
+						return getter.invoke(instance);
+					} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+						throw new SnapAdminException(e);
+					}
+				}
+			} else if (CompositeKeyUtils.hasIdClass(schema.getJavaClass())) {
+				// For @IdClass, extract values and create the ID class instance
+				CompositeKey compositeKey = CompositeKeyUtils.extractCompositeKey(instance, schema.getJavaClass());
+				return CompositeKeyUtils.createIdClassInstance(compositeKey, schema.getJavaClass());
+			}
+		}
+
+		// For simple primary keys
 		DbField primaryKeyField = schema.getPrimaryKey();
 		Method getter = findGetter(primaryKeyField.getJavaName());
-		
+
 		if (getter == null)
 			throw new SnapAdminException("Unable to find getter method for field `"
 				+ primaryKeyField.getJavaName() + "` in class " + instance.getClass());
-		
+
 		try {
 			Object result = getter.invoke(instance);
 			return result;
 		} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
 			throw new SnapAdminException(e);
+		}
+	}
+
+	/**
+	 * Gets the composite primary key value from this object.
+	 * For entities with @EmbeddedId or @IdClass, extracts all key field values.
+	 * For simple primary keys, creates a CompositeKey with a single field.
+	 *
+	 * @return CompositeKey with all primary key field values
+	 */
+	public CompositeKey getCompositeKeyValue() {
+		if (schema.hasCompositeKey() || schema.hasMultiplePrimaryKeys()) {
+			return CompositeKeyUtils.extractCompositeKey(instance, schema.getJavaClass());
+		} else {
+			// For simple primary keys, create a CompositeKey with single field
+			DbField primaryKeyField = schema.getPrimaryKey();
+			Object pkValue = getPrimaryKeyValue();
+
+			CompositeKey key = new CompositeKey();
+			key.put(primaryKeyField.getName(), pkValue);
+			return key;
+		}
+	}
+
+	/**
+	 * Gets the composite primary key value as a URL-safe string.
+	 * Format: field1:value1,field2:value2,... (using database field names)
+	 *
+	 * @return URL-safe string representation of the composite key
+	 */
+	public String getCompositeKeyUrlString() {
+		return getCompositeKeyValue().toUrlString(schema);
+	}
+
+	/**
+	 * Gets the primary key value as a URL-safe string.
+	 * For simple keys, returns the value encoded in base64 to handle special characters.
+	 * For composite keys, returns the formatted composite key string.
+	 *
+	 * @return URL-safe string representation of the primary key
+	 */
+	public String getPrimaryKeyUrlString() {
+		if (schema.hasCompositeKey() || schema.hasMultiplePrimaryKeys()) {
+			return getCompositeKeyUrlString();
+		} else {
+			String pkValueString = getPrimaryKeyValue().toString();
+			// Encode simple keys in base64 to handle special characters like commas, colons, etc.
+			return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(pkValueString.getBytes());
+		}
+	}
+
+	/**
+	 * Gets the primary key value as a fully URL-encoded string suitable for use in URLs.
+	 * This applies additional URL encoding on top of the base64 encoding to ensure
+	 * compatibility with all URL parsers.
+	 *
+	 * @return Fully URL-encoded primary key string
+	 */
+	public String getPrimaryKeyUrlEncoded() {
+		String base64Value = getPrimaryKeyUrlString();
+		try {
+			return java.net.URLEncoder.encode(base64Value, java.nio.charset.StandardCharsets.UTF_8);
+		} catch (Exception e) {
+			return base64Value;
 		}
 	}
 	
@@ -253,18 +403,47 @@ public class DbObject {
 		List<Method> methods = getAllDeclaredMethods(instance.getClass());
 
 		DbField dbField = schema.getFieldByJavaName(fieldName);
-		if (dbField == null) return null;
-		
-		String prefix = "get";
-		if (dbField.getType() instanceof BooleanFieldType) {
-			prefix = "is";
+
+		// If DbField exists and is boolean, try "is" prefix first
+		if (dbField != null && dbField.getType() instanceof BooleanFieldType) {
+			for (Method m : methods) {
+				if (m.getName().equalsIgnoreCase("is" + fieldName))
+					return m;
+			}
 		}
-		
+
+		// Try "get" prefix (works for all types including when dbField is null)
 		for (Method m : methods) {
-			if (m.getName().equalsIgnoreCase(prefix + fieldName))
+			if (m.getName().equalsIgnoreCase("get" + fieldName))
 				return m;
 		}
-		
+
+		// If dbField is null (e.g., @EmbeddedId field), also try "is" prefix
+		if (dbField == null) {
+			for (Method m : methods) {
+				if (m.getName().equalsIgnoreCase("is" + fieldName))
+					return m;
+			}
+		}
+
+		return null;
+	}
+
+	protected Method findGetterInClass(String fieldName, Class<?> clazz) {
+		List<Method> methods = getAllDeclaredMethods(clazz);
+
+		// Try "get" prefix first
+		for (Method m : methods) {
+			if (m.getName().equalsIgnoreCase("get" + fieldName))
+				return m;
+		}
+
+		// Try "is" prefix for boolean fields
+		for (Method m : methods) {
+			if (m.getName().equalsIgnoreCase("is" + fieldName))
+				return m;
+		}
+
 		return null;
 	}
 

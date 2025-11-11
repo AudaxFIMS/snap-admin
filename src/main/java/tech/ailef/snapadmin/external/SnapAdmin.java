@@ -7,16 +7,8 @@
 
 package tech.ailef.snapadmin.external;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.ParameterizedType;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-
+import jakarta.annotation.PostConstruct;
+import jakarta.persistence.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,34 +16,21 @@ import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.springframework.stereotype.Component;
-
-import jakarta.annotation.PostConstruct;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
-import jakarta.persistence.ManyToMany;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.OneToOne;
 import tech.ailef.snapadmin.external.annotations.Disable;
 import tech.ailef.snapadmin.external.annotations.DisplayFormat;
 import tech.ailef.snapadmin.external.dbmapping.CustomJpaRepository;
 import tech.ailef.snapadmin.external.dbmapping.DbObjectSchema;
-import tech.ailef.snapadmin.external.dbmapping.fields.DbField;
-import tech.ailef.snapadmin.external.dbmapping.fields.DbFieldType;
-import tech.ailef.snapadmin.external.dbmapping.fields.EnumFieldType;
-import tech.ailef.snapadmin.external.dbmapping.fields.StringFieldType;
-import tech.ailef.snapadmin.external.dbmapping.fields.TextFieldType;
+import tech.ailef.snapadmin.external.dbmapping.fields.*;
 import tech.ailef.snapadmin.external.dto.MappingError;
 import tech.ailef.snapadmin.external.exceptions.SnapAdminException;
 import tech.ailef.snapadmin.external.exceptions.SnapAdminNotFoundException;
 import tech.ailef.snapadmin.external.exceptions.UnsupportedFieldTypeException;
 import tech.ailef.snapadmin.external.misc.Utils;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.ParameterizedType;
+import java.util.*;
 
 /**
  * The main SnapAdmin class is responsible for the initialization phase. This class scans
@@ -76,7 +55,7 @@ public class SnapAdmin {
 	
 	private boolean authenticated;
 	
-	private static final String VERSION = "1.0.1";
+	private static final String VERSION = "1.0.2";
     
     /**
 	 * Builds the SnapAdmin instance by scanning the `@Entity` beans and loading
@@ -207,11 +186,33 @@ public class SnapAdmin {
 			Field[] fields = getAllFields(klass);
 			for (Field f : fields) {
 				try {
-					DbField field = mapField(f, schema);
-					field.setSchema(schema);
-					schema.addField(field);
+					// Special handling for @EmbeddedId fields
+					if (f.getAnnotation(EmbeddedId.class) != null) {
+						// Extract fields from the embedded ID class and add them as primary key fields
+						Class<?> embeddedIdType = f.getType();
+						Field[] embeddedFields = embeddedIdType.getDeclaredFields();
+						String embeddedIdFieldName = f.getName(); // Store the @EmbeddedId field name
+
+						for (Field embeddedField : embeddedFields) {
+							try {
+								DbField field = mapField(embeddedField, schema);
+								field.setSchema(schema);
+								field.setPrimaryKey(true);
+								field.setNullable(false);
+								field.setEmbeddedIdFieldName(embeddedIdFieldName); // Mark as part of @EmbeddedId
+								schema.addField(field);
+								logger.debug("Added embedded ID field: " + embeddedField.getName() + " as primary key (from @EmbeddedId field: " + embeddedIdFieldName + ")");
+							} catch (UnsupportedFieldTypeException e) {
+								logger.warn("Unable to map embedded ID field: " + embeddedField.getName());
+							}
+						}
+					} else {
+						DbField field = mapField(f, schema);
+						field.setSchema(schema);
+						schema.addField(field);
+					}
 				} catch (UnsupportedFieldTypeException e) {
-					logger.warn("The class " + klass.getSimpleName()  + " contains the field `" 
+					logger.warn("The class " + klass.getSimpleName()  + " contains the field `"
 								+ f.getName() + "` of type `" + f.getType().getSimpleName() + "`, which is not supported");
 					schema.addError(
 						new MappingError(
@@ -220,7 +221,7 @@ public class SnapAdmin {
 					);
 				}
 			}
-			
+
 			logger.debug("Processed " + klass + ", extracted " + schema.getSortedFields().size() + " fields");
 			
 			return schema;
