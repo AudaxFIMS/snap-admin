@@ -54,8 +54,9 @@ public class CustomJpaRepository extends SimpleJpaRepository {
         Root root = query.from(schema.getJavaClass());
 
         List<Predicate> finalPredicates = buildPredicates(q, queryFilters, cb, root);
-        
-        query.select(cb.count(root.get(schema.getPrimaryKey().getJavaName())))
+
+        // Use count(root) instead of count(primaryKey) to avoid issues with @EmbeddedId
+        query.select(cb.count(root))
             .where(
         		cb.and(
                 		finalPredicates.toArray(new Predicate[finalPredicates.size()])
@@ -75,14 +76,24 @@ public class CustomJpaRepository extends SimpleJpaRepository {
         List<Predicate> finalPredicates = buildPredicates(q, filters, cb, root);
 
 		if (q != null && !q.isEmpty()) {
+			// Get primary key path (handle @EmbeddedId)
+			Path pkPath;
+			DbField pkField = schema.getPrimaryKey();
+			if (pkField.isPartOfEmbeddedId()) {
+				String embeddedIdFieldName = pkField.getEmbeddedIdFieldName();
+				pkPath = root.get(embeddedIdFieldName).get(pkField.getJavaName());
+			} else {
+				pkPath = root.get(pkField.getJavaName());
+			}
+
 			query.select(root)
 				.where(
 					cb.or(
 						cb.and(finalPredicates.toArray(new Predicate[finalPredicates.size()])),
-						// query search on String fields
-						cb.equal(
-								cb.lower(cb.toString(root.get(schema.getPrimaryKey().getJavaName()))),
-								q.toLowerCase()
+						// query search on primary key field
+						cb.like(
+								cb.lower(cb.toString(pkPath)),
+								"%" + q.toLowerCase() + "%"
 						)
 					)
 				);
@@ -93,9 +104,19 @@ public class CustomJpaRepository extends SimpleJpaRepository {
 				);
 		}
 
-        
-        if (sortKey !=  null)
-        	query.orderBy(sortOrder.equals("DESC") ? cb.desc(root.get(sortKey)) : cb.asc(root.get(sortKey)));
+
+        if (sortKey !=  null) {
+        	// Get sort field path (handle @EmbeddedId)
+        	DbField sortField = schema.getFieldByJavaName(sortKey);
+        	Path sortPath;
+        	if (sortField != null && sortField.isPartOfEmbeddedId()) {
+        		String embeddedIdFieldName = sortField.getEmbeddedIdFieldName();
+        		sortPath = root.get(embeddedIdFieldName).get(sortKey);
+        	} else {
+        		sortPath = root.get(sortKey);
+        	}
+        	query.orderBy(sortOrder.equals("DESC") ? cb.desc(sortPath) : cb.asc(sortPath));
+        }
         
         return entityManager.createQuery(query).setMaxResults(pageSize)
         			.setFirstResult((page - 1) * pageSize).getResultList();
@@ -120,10 +141,10 @@ public class CustomJpaRepository extends SimpleJpaRepository {
 		for (DbField field : schema.getSortedFields()) {
 			if (field.isPrimaryKey()) continue;
 			if (field.isReadOnly()) continue;
-			
+
 			boolean keepValue = params.getOrDefault("__keep_" + field.getName(), "off").equals("on");
 			if (keepValue) continue;
-			
+
 			String stringValue = params.get(field.getName());
 			Object value = null;
 			if (stringValue != null && stringValue.isBlank()) stringValue = null;
@@ -146,18 +167,39 @@ public class CustomJpaRepository extends SimpleJpaRepository {
 					value = field.getConnectedSchema().getJpaRepository().findById(value).orElse(null);
 				}
 			}
-			
+
 			update.set(root.get(field.getJavaName()), value);
 			hasUpdate = true;
 		}
-		
+
 		if (!hasUpdate) return 0;
-		
-		String pkName = schema.getPrimaryKey().getJavaName();
-		Object parsedPk = schema.getPrimaryKey().getType().parseValue(
-				params.get(schema.getPrimaryKey().getName())
-		);
-		update.where(cb.equal(root.get(pkName), parsedPk));
+
+		// Build WHERE clause for composite or simple keys
+		if (schema.hasCompositeKey() || schema.hasMultiplePrimaryKeys()) {
+			// For composite keys, build WHERE with all PK fields
+			List<Predicate> pkPredicates = new ArrayList<>();
+			for (DbField pkField : schema.getPrimaryKeys()) {
+				String paramValue = params.get(pkField.getName());
+				Object parsedValue = pkField.getType().parseValue(paramValue);
+
+				// For @EmbeddedId fields, use path through embedded object
+				if (pkField.isPartOfEmbeddedId()) {
+					String embeddedIdFieldName = pkField.getEmbeddedIdFieldName();
+					pkPredicates.add(cb.equal(root.get(embeddedIdFieldName).get(pkField.getJavaName()), parsedValue));
+				} else {
+					// For @IdClass fields, use direct path
+					pkPredicates.add(cb.equal(root.get(pkField.getJavaName()), parsedValue));
+				}
+			}
+			update.where(cb.and(pkPredicates.toArray(new Predicate[0])));
+		} else {
+			// For simple keys
+			String pkName = schema.getPrimaryKey().getJavaName();
+			Object parsedPk = schema.getPrimaryKey().getType().parseValue(
+					params.get(schema.getPrimaryKey().getName())
+			);
+			update.where(cb.equal(root.get(pkName), parsedPk));
+		}
 
 		Query query = entityManager.createQuery(update);
 		return query.executeUpdate();
@@ -172,10 +214,17 @@ public class CustomJpaRepository extends SimpleJpaRepository {
         List<Predicate> queryPredicates = new ArrayList<>();
         if (q != null && !q.isBlank()) {
 	        for (DbField f : stringFields) {
-	        	Path path = root.get(f.getJavaName());
+	        	Path path;
+	        	if (f.isPartOfEmbeddedId()) {
+	        		// For @EmbeddedId fields, use path through embedded object
+	        		String embeddedIdFieldName = f.getEmbeddedIdFieldName();
+	        		path = root.get(embeddedIdFieldName).get(f.getJavaName());
+	        	} else {
+	        		path = root.get(f.getJavaName());
+	        	}
 	        	queryPredicates.add(cb.like(cb.lower(cb.toString(path)), "%" + q.toLowerCase() + "%"));
 	        }
-	        
+
 	        Predicate queryPredicate = cb.or(queryPredicates.toArray(new Predicate[queryPredicates.size()]));
 	        finalPredicates.add(queryPredicate);
         }
@@ -187,9 +236,9 @@ public class CustomJpaRepository extends SimpleJpaRepository {
         	DbField dbField = filter.getField();
         	String fieldName = dbField.getJavaName();
         	String v = filter.getValue();
-        	
+
         	Object value = null;
-        	
+
         	if (!v.isBlank()) {
 	        	try {
 	        		value = dbField.getType().parseValue(v);
@@ -197,51 +246,60 @@ public class CustomJpaRepository extends SimpleJpaRepository {
 	        		throw new SnapAdminException("Invalid value `" + v + "` specified for field `" + dbField.getName() + "`");
 	        	}
         	}
-        	
+
+        	// Get the correct path for the field (handle @EmbeddedId)
+        	Path fieldPath;
+        	if (dbField.isPartOfEmbeddedId()) {
+        		String embeddedIdFieldName = dbField.getEmbeddedIdFieldName();
+        		fieldPath = root.get(embeddedIdFieldName).get(fieldName);
+        	} else {
+        		fieldPath = root.get(fieldName);
+        	}
+
 			if (op == CompareOperator.STRING_EQ) {
 				if (value == null)
-					finalPredicates.add(cb.isNull(root.get(fieldName)));
+					finalPredicates.add(cb.isNull(fieldPath));
 				else
-					finalPredicates.add(cb.equal(cb.lower(cb.toString(root.get(fieldName))), value.toString().toLowerCase()));
+					finalPredicates.add(cb.equal(cb.lower(cb.toString(fieldPath)), value.toString().toLowerCase()));
 			} else if (op == CompareOperator.CONTAINS) {
 				if (value != null)
 					finalPredicates.add(
-						cb.like(cb.lower(cb.toString(root.get(fieldName))), "%" + value.toString().toLowerCase() + "%")
+						cb.like(cb.lower(cb.toString(fieldPath)), "%" + value.toString().toLowerCase() + "%")
 					);
 			} else if (op == CompareOperator.EQ) {
 				finalPredicates.add(
-					cb.equal(root.get(fieldName), value)
+					cb.equal(fieldPath, value)
 				);
 			} else if (op == CompareOperator.GT) {
 				if (value != null)
 					finalPredicates.add(
-						cb.greaterThan(root.get(fieldName), value.toString())
+						cb.greaterThan(fieldPath, value.toString())
 					);
 			} else if (op == CompareOperator.LT) {
 				if (value != null)
 					finalPredicates.add(
-						cb.lessThan(root.get(fieldName), value.toString())
+						cb.lessThan(fieldPath, value.toString())
 					);
 			} else if (op == CompareOperator.AFTER) {
 				if (value instanceof LocalDate)
 					finalPredicates.add(
-						cb.greaterThan(root.get(fieldName), (LocalDate)value)
+						cb.greaterThan(fieldPath, (LocalDate)value)
 					);
 				else if (value instanceof LocalDateTime)
 					finalPredicates.add(
-						cb.greaterThan(root.get(fieldName), (LocalDateTime)value)
+						cb.greaterThan(fieldPath, (LocalDateTime)value)
 					);
-				
+
 			} else if (op == CompareOperator.BEFORE) {
 				if (value instanceof LocalDate)
 					finalPredicates.add(
-						cb.lessThan(root.get(fieldName), (LocalDate)value)
+						cb.lessThan(fieldPath, (LocalDate)value)
 					);
 				else if (value instanceof LocalDateTime)
 					finalPredicates.add(
-						cb.lessThan(root.get(fieldName), (LocalDateTime)value)
+						cb.lessThan(fieldPath, (LocalDateTime)value)
 					);
-				
+
 			}
         }
         return finalPredicates;

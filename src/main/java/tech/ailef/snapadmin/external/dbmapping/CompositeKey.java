@@ -5,11 +5,14 @@
 
 package tech.ailef.snapadmin.external.dbmapping;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.util.Base64;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 /**
  * Represents a composite primary key for entities that use @EmbeddedId or @IdClass.
@@ -81,14 +84,47 @@ public class CompositeKey {
 
 	/**
 	 * Serializes this composite key to a URL-safe string format.
-	 * Format: field1:value1,field2:value2,...
+	 * The key is encoded as base64-encoded JSON to safely handle any special characters.
 	 *
-	 * @return URL-safe string representation
+	 * Note: This method uses Java field names as keys. If you need database names,
+	 * use toUrlString(DbObjectSchema schema) instead.
+	 *
+	 * @return URL-safe base64-encoded JSON string with Java field names
 	 */
 	public String toUrlString() {
-		return keyFields.entrySet().stream()
-			.map(e -> e.getKey() + ":" + e.getValue())
-			.collect(Collectors.joining(","));
+		try {
+			ObjectMapper mapper = new ObjectMapper();
+			String json = mapper.writeValueAsString(keyFields);
+			return Base64.getUrlEncoder().withoutPadding().encodeToString(json.getBytes());
+		} catch (JsonProcessingException e) {
+			throw new RuntimeException("Failed to serialize composite key to JSON", e);
+		}
+	}
+
+	/**
+	 * Serializes this composite key to a URL-safe string format using database field names.
+	 * The key is encoded as base64-encoded JSON to safely handle any special characters.
+	 *
+	 * @param schema the schema to map Java names to database names
+	 * @return URL-safe base64-encoded JSON string with database field names
+	 */
+	public String toUrlString(DbObjectSchema schema) {
+		// Convert Java field names to database field names
+		Map<String, Object> dbFieldMap = new LinkedHashMap<>();
+		for (Map.Entry<String, Object> entry : keyFields.entrySet()) {
+			tech.ailef.snapadmin.external.dbmapping.fields.DbField field =
+				schema.getFieldByJavaName(entry.getKey());
+			String dbFieldName = (field != null) ? field.getName() : entry.getKey();
+			dbFieldMap.put(dbFieldName, entry.getValue());
+		}
+
+		try {
+			ObjectMapper mapper = new ObjectMapper();
+			String json = mapper.writeValueAsString(dbFieldMap);
+			return Base64.getUrlEncoder().withoutPadding().encodeToString(json.getBytes());
+		} catch (JsonProcessingException e) {
+			throw new RuntimeException("Failed to serialize composite key to JSON", e);
+		}
 	}
 
 	@Override

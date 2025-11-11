@@ -178,6 +178,31 @@ public class DbObject {
 	}
 	
 	public Object getPrimaryKeyValue() {
+		// For composite keys (@EmbeddedId or @IdClass), return the entire key object
+		if (schema.hasCompositeKey() || schema.hasMultiplePrimaryKeys()) {
+			if (CompositeKeyUtils.hasEmbeddedId(schema.getJavaClass())) {
+				// For @EmbeddedId, get the embedded ID field value
+				java.lang.reflect.Field embeddedIdField = CompositeKeyUtils.getEmbeddedIdField(schema.getJavaClass());
+				if (embeddedIdField != null) {
+					Method getter = findGetter(embeddedIdField.getName());
+					if (getter == null) {
+						throw new SnapAdminException("Unable to find getter method for @EmbeddedId field `"
+							+ embeddedIdField.getName() + "` in class " + instance.getClass());
+					}
+					try {
+						return getter.invoke(instance);
+					} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+						throw new SnapAdminException(e);
+					}
+				}
+			} else if (CompositeKeyUtils.hasIdClass(schema.getJavaClass())) {
+				// For @IdClass, extract values and create the ID class instance
+				CompositeKey compositeKey = CompositeKeyUtils.extractCompositeKey(instance, schema.getJavaClass());
+				return CompositeKeyUtils.createIdClassInstance(compositeKey, schema.getJavaClass());
+			}
+		}
+
+		// For simple primary keys
 		DbField primaryKeyField = schema.getPrimaryKey();
 		Method getter = findGetter(primaryKeyField.getJavaName());
 
@@ -216,17 +241,17 @@ public class DbObject {
 
 	/**
 	 * Gets the composite primary key value as a URL-safe string.
-	 * Format: field1:value1,field2:value2,...
+	 * Format: field1:value1,field2:value2,... (using database field names)
 	 *
 	 * @return URL-safe string representation of the composite key
 	 */
 	public String getCompositeKeyUrlString() {
-		return getCompositeKeyValue().toUrlString();
+		return getCompositeKeyValue().toUrlString(schema);
 	}
 
 	/**
 	 * Gets the primary key value as a URL-safe string.
-	 * For simple keys, returns just the value.
+	 * For simple keys, returns the value encoded in base64 to handle special characters.
 	 * For composite keys, returns the formatted composite key string.
 	 *
 	 * @return URL-safe string representation of the primary key
@@ -235,7 +260,25 @@ public class DbObject {
 		if (schema.hasCompositeKey() || schema.hasMultiplePrimaryKeys()) {
 			return getCompositeKeyUrlString();
 		} else {
-			return getPrimaryKeyValue().toString();
+			String pkValueString = getPrimaryKeyValue().toString();
+			// Encode simple keys in base64 to handle special characters like commas, colons, etc.
+			return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(pkValueString.getBytes());
+		}
+	}
+
+	/**
+	 * Gets the primary key value as a fully URL-encoded string suitable for use in URLs.
+	 * This applies additional URL encoding on top of the base64 encoding to ensure
+	 * compatibility with all URL parsers.
+	 *
+	 * @return Fully URL-encoded primary key string
+	 */
+	public String getPrimaryKeyUrlEncoded() {
+		String base64Value = getPrimaryKeyUrlString();
+		try {
+			return java.net.URLEncoder.encode(base64Value, java.nio.charset.StandardCharsets.UTF_8);
+		} catch (Exception e) {
+			return base64Value;
 		}
 	}
 	

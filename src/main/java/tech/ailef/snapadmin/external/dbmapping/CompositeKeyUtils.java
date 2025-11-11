@@ -5,6 +5,9 @@
 
 package tech.ailef.snapadmin.external.dbmapping;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Id;
 import jakarta.persistence.IdClass;
@@ -15,6 +18,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -111,7 +115,7 @@ public class CompositeKeyUtils {
 	 * Parses a composite key from URL string format (field1:value1,field2:value2,...)
 	 * @param urlString the URL string to parse
 	 * @param schema the entity schema
-	 * @return CompositeKey object with parsed values
+	 * @return CompositeKey object with parsed values (using Java field names as keys)
 	 */
 	public static CompositeKey parseFromUrl(String urlString, DbObjectSchema schema) {
 		CompositeKey key = new CompositeKey();
@@ -120,25 +124,79 @@ public class CompositeKeyUtils {
 			throw new SnapAdminException("Cannot parse empty composite key string");
 		}
 
-		String[] pairs = urlString.split(",");
-		for (String pair : pairs) {
-			String[] parts = pair.split(":", 2);
-			if (parts.length != 2) {
-				throw new SnapAdminException("Invalid composite key format: " + pair +
-					". Expected format: fieldName:value");
+		// Try to decode as base64 first
+		String decodedString;
+		boolean wasBase64 = false;
+		try {
+			byte[] decodedBytes = Base64.getUrlDecoder().decode(urlString);
+			decodedString = new String(decodedBytes);
+			wasBase64 = true;
+		} catch (IllegalArgumentException e) {
+			// Not valid base64, try to parse as plain format (backward compatibility)
+			decodedString = urlString;
+		}
+
+		// Try to parse as JSON first (new format)
+		Map<String, Object> fieldMap = null;
+		try {
+			ObjectMapper mapper = new ObjectMapper();
+			fieldMap = mapper.readValue(decodedString, new TypeReference<Map<String, Object>>() {});
+		} catch (Exception e) {
+			// Not JSON, try legacy format: field1:value1,field2:value2
+			fieldMap = null;
+		}
+
+		if (fieldMap != null) {
+			// Parse JSON format
+			for (Map.Entry<String, Object> entry : fieldMap.entrySet()) {
+				String fieldName = entry.getKey();
+				Object rawValue = entry.getValue();
+
+				DbField field = schema.getFieldByName(fieldName);
+				if (field == null) {
+					throw new SnapAdminException("Field " + fieldName +
+						" not found in schema " + schema.getSimpleClassName());
+				}
+
+				Object parsedValue = field.getType().parseValue(rawValue);
+				// Use Java field name as key, not database name
+				String javaFieldName = field.getJavaName();
+				key.put(javaFieldName, parsedValue);
+			}
+		} else {
+			// Parse legacy format: field1:value1,field2:value2
+			// First check if this looks like a composite key format at all
+			if (!decodedString.contains(":")) {
+				String errorMsg = "Invalid composite key format. " +
+					"Original input: '" + urlString + "', " +
+					"Decoded: '" + decodedString + "', " +
+					"Was base64: " + wasBase64 + ". " +
+					"Expected format: field:value or base64(JSON). " +
+					"Schema: " + schema.getSimpleClassName();
+				throw new SnapAdminException(errorMsg);
 			}
 
-			String fieldName = parts[0].trim();
-			String rawValue = parts[1].trim();
+			String[] pairs = decodedString.split(",");
+			for (String pair : pairs) {
+				String[] parts = pair.split(":", 2);
+				if (parts.length != 2) {
+					throw new SnapAdminException("Invalid composite key format: " + pair +
+						". Expected format: fieldName:value");
+				}
 
-			DbField field = schema.getFieldByName(fieldName);
-			if (field == null) {
-				throw new SnapAdminException("Field " + fieldName +
-					" not found in schema " + schema.getSimpleClassName());
+				String fieldName = parts[0].trim();
+				String rawValue = parts[1].trim();
+
+				DbField field = schema.getFieldByName(fieldName);
+				if (field == null) {
+					throw new SnapAdminException("Field " + fieldName +
+						" not found in schema " + schema.getSimpleClassName());
+				}
+
+				Object parsedValue = field.getType().parseValue(rawValue);
+				String javaFieldName = field.getJavaName();
+				key.put(javaFieldName, parsedValue);
 			}
-
-			Object parsedValue = field.getType().parseValue(rawValue);
-			key.put(fieldName, parsedValue);
 		}
 
 		return key;

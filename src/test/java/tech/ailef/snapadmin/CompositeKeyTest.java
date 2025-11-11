@@ -36,8 +36,21 @@ public class CompositeKeyTest {
 		key.put("order_number", "ORD-001");
 
 		String urlString = key.toUrlString();
-		assertTrue(urlString.contains("customer_id:123"));
-		assertTrue(urlString.contains("order_number:ORD-001"));
+		// URL string should be base64 encoded, verify it's not empty and is valid base64
+		assertNotNull(urlString);
+		assertFalse(urlString.isEmpty());
+		// Verify we can decode it back
+		try {
+			byte[] decoded = java.util.Base64.getUrlDecoder().decode(urlString);
+			String decodedString = new String(decoded);
+			// The decoded string should contain the values in JSON format
+			assertTrue(decodedString.contains("customer_id"));
+			assertTrue(decodedString.contains("123"));
+			assertTrue(decodedString.contains("order_number"));
+			assertTrue(decodedString.contains("ORD-001"));
+		} catch (IllegalArgumentException e) {
+			fail("URL string should be valid base64: " + urlString);
+		}
 	}
 
 	@Test
