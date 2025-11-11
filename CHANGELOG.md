@@ -1,4 +1,9 @@
 # Changelog
+**1.0.3**
+
+FIXES:
+- logs review fix;
+
 **1.0.2**
 
 UPDATES:

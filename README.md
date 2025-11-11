@@ -57,7 +57,7 @@ The code is still in a very early stage and it might not be robust if you use no
 <dependency>
 	<groupId>dev.semeshin</groupId>
 	<artifactId>snap-admin</artifactId>
-	<version>1.0.2</version>
+	<version>1.0.3</version>
 </dependency>
 ```
 
