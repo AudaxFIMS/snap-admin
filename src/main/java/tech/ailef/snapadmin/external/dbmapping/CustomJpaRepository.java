@@ -75,25 +75,27 @@ public class CustomJpaRepository extends SimpleJpaRepository {
         
         List<Predicate> finalPredicates = buildPredicates(q, filters, cb, root);
 
-		if (q != null && !q.isEmpty()) {
-			// Get primary key path (handle @EmbeddedId)
-			Path pkPath;
-			DbField pkField = schema.getPrimaryKey();
-			if (pkField.isPartOfEmbeddedId()) {
-				String embeddedIdFieldName = pkField.getEmbeddedIdFieldName();
-				pkPath = root.get(embeddedIdFieldName).get(pkField.getJavaName());
-			} else {
-				pkPath = root.get(pkField.getJavaName());
-			}
+	if (q != null && !q.isEmpty()) {
+		// Get primary key path (handle @EmbeddedId)
+		Path pkPath;
+		DbField pkField = schema.getPrimaryKey();
+		if (pkField.isPartOfEmbeddedId()) {
+			String embeddedIdFieldName = pkField.getEmbeddedIdFieldName();
+			pkPath = root.get(embeddedIdFieldName).get(pkField.getJavaName());
+		} else {
+			pkPath = root.get(pkField.getJavaName());
+		}
 
-			// Convert path to string (handles UUID and other types)
-			jakarta.persistence.criteria.Expression<String> pkPathAsString;
-			if (pkPath.getJavaType() == java.util.UUID.class) {
-			// For UUID, use Hibernate str() function which works across databases
-			pkPathAsString = cb.function("str", String.class, pkPath);
-			} else {
-				pkPathAsString = cb.toString(pkPath);
-			}
+		// Check if we can search by primary key (skip UUID as it's stored as binary)
+		if (pkPath.getJavaType() == java.util.UUID.class) {
+			// For UUID primary keys, only use the general field predicates (no PK search)
+			query.select(root)
+				.where(
+					cb.and(finalPredicates.toArray(new Predicate[finalPredicates.size()]))
+				);
+		} else {
+			// For non-UUID keys, include primary key search
+			jakarta.persistence.criteria.Expression<String> pkPathAsString = cb.toString(pkPath);
 
 			query.select(root)
 				.where(
@@ -106,7 +108,8 @@ public class CustomJpaRepository extends SimpleJpaRepository {
 						)
 					)
 				);
-		} else {
+		}
+	} else {
 			query.select(root)
 				.where(
 					cb.and(finalPredicates.toArray(new Predicate[finalPredicates.size()])) // query search on String fields
@@ -233,15 +236,13 @@ public class CustomJpaRepository extends SimpleJpaRepository {
 	        		path = root.get(f.getJavaName());
 	        	}
 
-	        	// Convert to string (handles UUID and other types)
-	        	jakarta.persistence.criteria.Expression<String> pathAsString;
+	        	// Skip UUID fields from text search (UUID stored as binary cannot be searched as text)
 	        	if (path.getJavaType() == java.util.UUID.class) {
-	        		// For UUID, use Hibernate str() function which works across databases
-	        		pathAsString = cb.function("str", String.class, path);
-	        	} else {
-	        		pathAsString = cb.toString(path);
+	        		continue;
 	        	}
 
+	        	// Convert to string for text search
+	        	jakarta.persistence.criteria.Expression<String> pathAsString = cb.toString(path);
 	        	queryPredicates.add(cb.like(cb.lower(pathAsString), "%" + q.toLowerCase() + "%"));
 	        }
 

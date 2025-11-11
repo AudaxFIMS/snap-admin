@@ -545,7 +545,9 @@ public class SnapAdminController {
 					}
 					pkValue = compositeKey.toUrlString(schema);
 				} else {
-					pkValue = newPrimaryKey.toString();
+					// Encode simple key to base64
+					String pkValueString = newPrimaryKey.toString();
+					pkValue = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(pkValueString.getBytes());
 				}
 
 				attr.addFlashAttribute("message", "Item created successfully.");
@@ -580,6 +582,20 @@ public class SnapAdminController {
 					} else {
 						repository.update(schema, params, files);
 						repository.attachManyToMany(schema, parsedPkValue, multiValuedParams);
+
+					// Encode pkValue for redirect URL
+					if (schema.hasCompositeKey() || schema.hasMultiplePrimaryKeys()) {
+						// For composite keys, extract and encode
+						tech.ailef.snapadmin.external.dbmapping.CompositeKey compositeKey =
+						tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.extractCompositeKey(
+							object.get().getUnderlyingInstance(), schema.getJavaClass()
+						);
+						pkValue = compositeKey.toUrlString(schema);
+					} else {
+						// For simple keys, encode to base64
+						String pkValueString = parsedPkValue.toString();
+						pkValue = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(pkValueString.getBytes());
+					}
 						attr.addFlashAttribute("message", "Item saved successfully.");
 						saveAction(new UserAction(schema.getTableName(), parsedPkValue.toString(), "EDIT", schema.getClassName(), authUser));
 					}
@@ -608,7 +624,9 @@ public class SnapAdminController {
 						}
 						pkValue = compositeKey.toUrlString(schema);
 					} else {
-						pkValue = newPrimaryKey.toString();
+					// Encode simple key to base64
+					String pkValueString = newPrimaryKey.toString();
+					pkValue = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(pkValueString.getBytes());
 					}
 
 					attr.addFlashAttribute("message", "Item created successfully");
