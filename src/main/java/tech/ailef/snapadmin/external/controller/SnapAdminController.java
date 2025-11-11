@@ -251,12 +251,35 @@ public class SnapAdminController {
 	 * @param id
 	 * @return
 	 */
+	/**
+	 * Helper method to parse primary key value from URL string.
+	 * Handles both simple and composite keys.
+	 */
+	private Object parsePrimaryKeyFromUrl(DbObjectSchema schema, String id) {
+		if (schema.hasCompositeKey() || schema.hasMultiplePrimaryKeys()) {
+			// For composite keys, parse the URL string
+			tech.ailef.snapadmin.external.dbmapping.CompositeKey compositeKey =
+				tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.parseFromUrl(id, schema);
+
+			if (tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.hasEmbeddedId(schema.getJavaClass())) {
+				return tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.createEmbeddedIdInstance(compositeKey, schema.getJavaClass());
+			} else if (tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.hasIdClass(schema.getJavaClass())) {
+				return tech.ailef.snapadmin.external.dbmapping.CompositeKeyUtils.createIdClassInstance(compositeKey, schema.getJavaClass());
+			} else {
+				throw new tech.ailef.snapadmin.external.exceptions.SnapAdminException("Entity has multiple primary keys but no @EmbeddedId or @IdClass");
+			}
+		} else {
+			// For simple keys, parse as before
+			return schema.getPrimaryKey().getType().parseValue(id);
+		}
+	}
+
 	@GetMapping("/model/{className}/show/{id}")
 	public String show(Model model, @PathVariable String className, @PathVariable String id) {
 		DbObjectSchema schema = snapAdmin.findSchemaByClassName(className);
-		
-		Object pkValue = schema.getPrimaryKey().getType().parseValue(id);
-		
+
+		Object pkValue = parsePrimaryKeyFromUrl(schema, id);
+
 		DbObject object = repository.findById(schema, pkValue).orElseThrow(() -> {
 			return new SnapAdminNotFoundException(
 				schema.getSimpleClassName() + " with ID " + id + " not found."
@@ -294,15 +317,16 @@ public class SnapAdminController {
 	@GetMapping("/model/{className}/edit/{id}")
 	public String edit(Model model, @PathVariable String className, @PathVariable String id, RedirectAttributes attr) {
 		DbObjectSchema schema = snapAdmin.findSchemaByClassName(className);
-		
-		Object pkValue = schema.getPrimaryKey().getType().parseValue(id);
-		
+
+		// Parse PK value correctly for composite and simple keys
+		Object pkValue = parsePrimaryKeyFromUrl(schema, id);
+
 		if (!schema.isEditEnabled()) {
 			attr.addFlashAttribute("errorTitle", "Unauthorized");
 			attr.addFlashAttribute("error", "EDIT operations have been disabled on this type (" + schema.getSimpleClassName() + ").");
 			return "redirect:/" + properties.getBaseUrl() + "/model/" + className;
 		}
-		
+
 		DbObject object = repository.findById(schema, pkValue).orElseThrow(() -> {
 			return new SnapAdminNotFoundException(
 			  "Object " + className + " with id " + id + " not found"
