@@ -86,13 +86,22 @@ public class CustomJpaRepository extends SimpleJpaRepository {
 				pkPath = root.get(pkField.getJavaName());
 			}
 
+			// Convert path to string (handles UUID and other types)
+			jakarta.persistence.criteria.Expression<String> pkPathAsString;
+			if (pkPath.getJavaType() == java.util.UUID.class) {
+			// For UUID, use Hibernate str() function which works across databases
+			pkPathAsString = cb.function("str", String.class, pkPath);
+			} else {
+				pkPathAsString = cb.toString(pkPath);
+			}
+
 			query.select(root)
 				.where(
 					cb.or(
 						cb.and(finalPredicates.toArray(new Predicate[finalPredicates.size()])),
-						// query search on primary key field
+						// query search on primary key field (partial match)
 						cb.like(
-								cb.lower(cb.toString(pkPath)),
+								cb.lower(pkPathAsString),
 								"%" + q.toLowerCase() + "%"
 						)
 					)
@@ -121,6 +130,7 @@ public class CustomJpaRepository extends SimpleJpaRepository {
         return entityManager.createQuery(query).setMaxResults(pageSize)
         			.setFirstResult((page - 1) * pageSize).getResultList();
 	}
+
 	
 	
 	public List<Object> search(String query, Set<QueryFilter> filters) {
@@ -222,7 +232,17 @@ public class CustomJpaRepository extends SimpleJpaRepository {
 	        	} else {
 	        		path = root.get(f.getJavaName());
 	        	}
-	        	queryPredicates.add(cb.like(cb.lower(cb.toString(path)), "%" + q.toLowerCase() + "%"));
+
+	        	// Convert to string (handles UUID and other types)
+	        	jakarta.persistence.criteria.Expression<String> pathAsString;
+	        	if (path.getJavaType() == java.util.UUID.class) {
+	        		// For UUID, use Hibernate str() function which works across databases
+	        		pathAsString = cb.function("str", String.class, path);
+	        	} else {
+	        		pathAsString = cb.toString(path);
+	        	}
+
+	        	queryPredicates.add(cb.like(cb.lower(pathAsString), "%" + q.toLowerCase() + "%"));
 	        }
 
 	        Predicate queryPredicate = cb.or(queryPredicates.toArray(new Predicate[queryPredicates.size()]));
