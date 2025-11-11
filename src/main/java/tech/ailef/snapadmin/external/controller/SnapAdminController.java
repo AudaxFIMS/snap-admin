@@ -597,7 +597,7 @@ public class SnapAdminController {
 						pkValue = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(pkValueString.getBytes());
 					}
 						attr.addFlashAttribute("message", "Item saved successfully.");
-						saveAction(new UserAction(schema.getTableName(), parsedPkValue.toString(), "EDIT", schema.getClassName(), authUser));
+						saveAction(new UserAction(schema.getTableName(), pkValue, "EDIT", schema.getClassName(), authUser));
 					}
 				} else {
 					Object newPrimaryKey = repository.create(schema, params, files, pkValue);
