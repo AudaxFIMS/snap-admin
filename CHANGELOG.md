@@ -1,9 +1,9 @@
-# Planned features
-
-TODO:
-- support an edition of entities with composite primary keys (for now available just in table review mode);
-
 # Changelog
+**1.0.2**
+
+FIXES:
+- logs review fix;
+
 **1.0.2**
 
 UPDATES:
